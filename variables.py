@@ -1,1 +1,1 @@
-match = open("medienstandard-kategorien.txt").read().splitlines()
+match = open('medienstandard-kategorien.txt').read().splitlines()

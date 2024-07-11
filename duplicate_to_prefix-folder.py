@@ -1,3 +1,4 @@
+import sys
 import os
 import shutil
 import re
@@ -13,10 +14,38 @@ SKIPPED = "skipped_files"
 if not os.path.isdir(DST):
     os.makedirs(DST, exist_ok=True)
 
-# Generate the skipped files subdirectory name with the current date and time as suffix
 # Get the current date and time
 now = datetime.now()
 date_suffix = now.isoformat(timespec='seconds')
+
+# Specify the log destination directory and log file name
+log_directory = os.path.join(DST, "log")
+log_file_name = "script_" + date_suffix + ".log"
+
+# Ensure the log directory exists
+os.makedirs(log_directory, exist_ok=True)
+
+# Create the full path to the log file
+log_path = os.path.join(log_directory, log_file_name)
+
+class Logger(object):
+    def __init__(self, filename):
+        self.terminal = sys.stdout
+        self.log = open(filename, "a")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()  # Ensure it's written immediately
+
+    def flush(self):
+        pass
+
+# Redirect stdout and stderr to the log file
+sys.stdout = Logger(log_path)
+sys.stderr = Logger(log_path)
+
+# Generate the skipped files subdirectory name with the current date and time as suffix
 skipped_subfolder_name = SKIPPED + '_' + date_suffix
 skipped_subfolder = os.path.join(SRC, skipped_subfolder_name)
 
