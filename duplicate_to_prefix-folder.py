@@ -26,8 +26,10 @@ if not os.path.isdir(skipped_subfolder):
 
 # loop on all files and get the folder name that each file is supposed to move to
 for dirpath, dirnames, filenames in os.walk(SRC):
+    # skip directories that start with SKIPPED
     if dirpath.startswith(os.path.join(SRC, SKIPPED)):
         continue
+    # skip ".DS_Store" files
     for file_name in filenames:
         file_path = os.path.join(dirpath, file_name)
         if file_name == ".DS_Store":
@@ -46,9 +48,11 @@ for dirpath, dirnames, filenames in os.walk(SRC):
                 shutil.copy2(file_path, os.path.join(DST, folder_name))
                 print(f"Copied {file_path} (conform) to {DST, folder_name}")
                 os.remove(file_path)
+            # if file does exist move file into SKIPPED path
             else:
                 shutil.move(file_path, skipped_subfolder)
                 print(f"Skipped {file_path} (conform); moved to {skipped_subfolder}")
+        # if file does conform with 'medienstandard-kategorien.txt' move file into SKIPPED path
         else:
             if not os.path.isdir(skipped_subfolder):
                 os.makedirs(skipped_subfolder, exist_ok=True)
