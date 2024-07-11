@@ -5,8 +5,8 @@ import re
 from datetime import datetime
 from variables import match
 
-SRC = "path/to/source/directory"
-DST = "path/to/destination/directory"
+SRC = "./test_source"
+DST = "./test_destination"
 SKIPPED = "skipped_files"
 
 # create DST path
