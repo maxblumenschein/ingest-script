@@ -6,9 +6,12 @@ import re
 from datetime import datetime
 from variables import match
 
-SRC = "./test_source"
-DST = "./test_destination"
-SKIPPED = "skipped_files"
+# Get the directory of the main script
+script_dir = os.path.dirname(__file__)
+
+SRC = os.path.join(script_dir, "test_source") # define SRC directory
+DST = os.path.join(script_dir, "test_destination") # define SRC directory
+SKIPPED = "skipped_files" # define directory name for skipped files
 
 # create DST path
 if not os.path.isdir(DST):
@@ -93,7 +96,7 @@ for dirpath, dirnames, filenames in os.walk(SRC, topdown=False):
     # Skip the excluded folder and its subdirectories
     if dirpath.startswith(os.path.join(SRC, SKIPPED)):
         continue
-    
+
     # Process files
     for file_name in filenames:
         file_path = os.path.join(dirpath, file_name)
