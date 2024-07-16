@@ -3,12 +3,13 @@ import os
 import shutil
 import re
 
-from datetime import datetime
+from datetime import datetime, timezone
 from variables import match
 
 # Get the directory of the main script
 script_dir = os.path.dirname(__file__)
 
+# Define variables
 SRC = os.path.join(script_dir, "test_source") # define SRC directory
 DST = os.path.join(script_dir, "test_destination") # define SRC directory
 SKIPPED = "skipped_files" # define directory name for skipped files
@@ -18,8 +19,9 @@ if not os.path.isdir(DST):
     os.makedirs(DST, exist_ok=True)
 
 # Get the current date and time
-now = datetime.now()
+now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
+date_isoformat = now.astimezone().replace(microsecond=0).isoformat()
 
 # Specify the log destination directory and log file name
 log_directory = os.path.join(DST, "log")
@@ -49,9 +51,11 @@ sys.stdout = Logger(log_path)
 sys.stderr = Logger(log_path)
 
 # Generate the skipped files subdirectory name with the current date and time as suffix
-skipped_subfolder_name = SKIPPED + '_' + date_suffix
-skipped_subfolder = os.path.join(SRC, skipped_subfolder_name)
+skipped_directory_name = SKIPPED + '_' + date_suffix
+skipped_directory = os.path.join(SRC, skipped_directory_name)
 
+# annotate log-file
+print(f"{date_isoformat}" " | " f"source directory = {SRC}" " | " f"destination directory = {DST}" "\n" f"---START-INGEST---")
 # loop on all files and get the folder name that each file is supposed to move to
 for dirpath, dirnames, filenames in os.walk(SRC):
     # skip directories that start with SKIPPED
@@ -62,34 +66,33 @@ for dirpath, dirnames, filenames in os.walk(SRC):
         file_path = os.path.join(dirpath, file_name)
         if file_name == ".DS_Store":
             continue
-
         # check with list "match" if it is one of the files we are looking for
         if any(re.findall('|'.join(match), file_name)):
             # extract folder name
-            folder_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
+            dst_directory_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
             # create folder if it doesn't exist
-            if not os.path.isdir(os.path.join(DST, folder_name)):
-                os.mkdir(os.path.join(DST, folder_name))
-            # if file doesn't already exist copy the file
-            if not os.path.isfile(os.path.join(DST, folder_name, file_name)):
-                # copy the file with metadata
-                shutil.copy2(file_path, os.path.join(DST, folder_name))
-                print(f"Copied {file_path} (conform) to {DST, folder_name}")
-                os.remove(file_path)
+            dst_directory = os.path.join(DST, dst_directory_name)
+            if not os.path.isdir(dst_directory):
+                os.mkdir(dst_directory)
+            # if file doesn't already exist move the file
+            if not os.path.isfile(os.path.join(dst_directory, file_name)):
+                shutil.move(file_path, dst_directory)
+                print(f"{file_name} = CONFORM --> MOVED to {dst_directory}")
             # if file does already exist move file into SKIPPED path
             else:
-                if not os.path.isdir(skipped_subfolder):
-                    os.makedirs(skipped_subfolder, exist_ok=True)
-                shutil.move(file_path, skipped_subfolder)
-                print(f"Skipped {file_path} (conform); moved to {skipped_subfolder}")
+                if not os.path.isdir(skipped_directory):
+                    os.makedirs(skipped_directory, exist_ok=True)
+                shutil.move(file_path, skipped_directory)
+                print(f"{file_name} = CONFORM --> SKIPPED, MOVED to {skipped_directory}")
         # if file does conform with list "match" move file into SKIPPED path
         else:
-            if not os.path.isdir(skipped_subfolder):
-                os.makedirs(skipped_subfolder, exist_ok=True)
-            shutil.move(file_path, skipped_subfolder)
-            print(f"Skipped {file_path} (not conform); moved to {skipped_subfolder}")
+            if not os.path.isdir(skipped_directory):
+                os.makedirs(skipped_directory, exist_ok=True)
+            shutil.move(file_path, skipped_directory)
+            print(f"{file_path} = NOT CONFORM --> MOVED to {skipped_directory}")
 
 # clean-up SRC except "skipped_files"-folder
+print(f"---CLEAN-UP---")
 for dirpath, dirnames, filenames in os.walk(SRC, topdown=False):
     # Skip the excluded folder and its subdirectories
     if dirpath.startswith(os.path.join(SRC, SKIPPED)):
@@ -108,7 +111,8 @@ for dirpath, dirnames, filenames in os.walk(SRC, topdown=False):
         dir_path = os.path.join(dirpath, dirname)
         try:
             os.rmdir(dir_path)
-            print(f"Removed empty directory: {dir_path}")
+            print(f"REMOVED (empty directory): {dir_path}")
         except OSError:
             # The directory is not empty
-            print(f"Directory not empty, skipping: {dir_path}")
+            print(f"SKIPPED (directory not empty): {dir_path}")
+print(f"---DONE---")
