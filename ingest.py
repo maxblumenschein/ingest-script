@@ -60,7 +60,6 @@ print(f"{date_isoformat} [info         ] Start ingest process \n"
       f"{date_isoformat} [info         ] Destination directory = {DST}"
     )
 
-#" | " f"source directory = {SRC}" " | " f"destination directory = {DST}" "\n" f"---START-INGEST---")
 # loop on all files and get the folder name that each file is supposed to move to
 for dirpath, dirnames, filenames in os.walk(SRC):
     # skip directories that start with SKIPPED
