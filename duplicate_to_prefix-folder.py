@@ -66,7 +66,7 @@ for dirpath, dirnames, filenames in os.walk(SRC):
         # check with list "match" if it is one of the files we are looking for
         if any(re.findall('|'.join(match), file_name)):
             # extract folder name
-            folder_name = file_name.split("_")[0][1:4]
+            folder_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
             # create folder if it doesn't exist
             if not os.path.isdir(os.path.join(DST, folder_name)):
                 os.mkdir(os.path.join(DST, folder_name))
