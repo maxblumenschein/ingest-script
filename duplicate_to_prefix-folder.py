@@ -52,10 +52,6 @@ sys.stderr = Logger(log_path)
 skipped_subfolder_name = SKIPPED + '_' + date_suffix
 skipped_subfolder = os.path.join(SRC, skipped_subfolder_name)
 
-# create SKIPPED path
-if not os.path.isdir(skipped_subfolder):
-    os.makedirs(skipped_subfolder, exist_ok=True)
-
 # loop on all files and get the folder name that each file is supposed to move to
 for dirpath, dirnames, filenames in os.walk(SRC):
     # skip directories that start with SKIPPED
@@ -67,24 +63,26 @@ for dirpath, dirnames, filenames in os.walk(SRC):
         if file_name == ".DS_Store":
             continue
 
-        # check with 'medienstandard-kategorien.txt' if it is one of the files we are looking for
+        # check with list "match" if it is one of the files we are looking for
         if any(re.findall('|'.join(match), file_name)):
             # extract folder name
             folder_name = file_name.split("_")[0][1:4]
             # create folder if it doesn't exist
             if not os.path.isdir(os.path.join(DST, folder_name)):
                 os.mkdir(os.path.join(DST, folder_name))
-            # if file doesn't exist copy the file
+            # if file doesn't already exist copy the file
             if not os.path.isfile(os.path.join(DST, folder_name, file_name)):
                 # copy the file with metadata
                 shutil.copy2(file_path, os.path.join(DST, folder_name))
                 print(f"Copied {file_path} (conform) to {DST, folder_name}")
                 os.remove(file_path)
-            # if file does exist move file into SKIPPED path
+            # if file does already exist move file into SKIPPED path
             else:
+                if not os.path.isdir(skipped_subfolder):
+                    os.makedirs(skipped_subfolder, exist_ok=True)
                 shutil.move(file_path, skipped_subfolder)
                 print(f"Skipped {file_path} (conform); moved to {skipped_subfolder}")
-        # if file does conform with 'medienstandard-kategorien.txt' move file into SKIPPED path
+        # if file does conform with list "match" move file into SKIPPED path
         else:
             if not os.path.isdir(skipped_subfolder):
                 os.makedirs(skipped_subfolder, exist_ok=True)
