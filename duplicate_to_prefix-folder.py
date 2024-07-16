@@ -19,7 +19,7 @@ if not os.path.isdir(DST):
 
 # Get the current date and time
 now = datetime.now()
-date_suffix = now.isoformat(timespec='seconds')
+date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
 
 # Specify the log destination directory and log file name
 log_directory = os.path.join(DST, "log")
