@@ -119,4 +119,4 @@ for dirpath, dirnames, filenames in os.walk(SRC, topdown=False):
         except OSError:
             # The directory is not empty
             print(f"{date_isoformat} [info         ] SKIPPED directory not empty {dir_path}")
-print(f"{date_isoformat} [info         ] DONE")
+print(f"{date_isoformat} [info         ] Done")
