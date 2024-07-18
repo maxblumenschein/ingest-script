@@ -64,7 +64,7 @@ print(f"{date_isoformat} [info         ] Start ingest process \n"
 # File check
 def is_image_file(file_name):
     # List of image file extensions
-    image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
+    image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff', '.webp')
     return file_name.lower().endswith(image_extensions)
 
 def check_segment_length(file_name):
