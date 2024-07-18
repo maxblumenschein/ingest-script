@@ -88,15 +88,19 @@ def check_second_forth_character(file_name, second_forth_characters):
 
 def file_check(file_name):
     if not is_image_file(file_name):
+        print(f"{date_isoformat} [warning      ] {file_name} = invalid file-type")
         return False
 
     if not check_segment_length(file_name):
+        print(f"{date_isoformat} [warning      ] {file_name} = invalid segment length")
         return False
 
     if not check_first_character(file_name, first_characters):
+        print(f"{date_isoformat} [warning      ] {file_name} = invalid prefix")
         return False
 
     if not check_second_forth_character(file_name, second_forth_characters):
+        print(f"{date_isoformat} [warning      ] {file_name} = invalid prefix")
         return False
 
     return True
