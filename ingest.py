@@ -11,8 +11,8 @@ from variables import second_forth_characters
 script_dir = os.path.dirname(__file__)
 
 # Define variables
-SRC = os.path.join(script_dir, "test_source") # define SRC directory
-DST = os.path.join(script_dir, "test_destination") # define SRC directory
+SRC = os.path.join(script_dir, "test_source") # define source directory
+DST = os.path.join(script_dir, "test_destination") # define destination directory
 SKIPPED = "skipped_files" # define directory name for skipped files
 
 # create DST path
