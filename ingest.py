@@ -4,16 +4,10 @@ import shutil
 import re
 
 from datetime import datetime, timezone
-from variables import first_characters
-from variables import second_forth_characters
+from variables import *
 
 # Get the directory of the main script
 script_dir = os.path.dirname(__file__)
-
-# Define variables
-SRC = os.path.join(script_dir, "test_source") # define source directory
-DST = os.path.join(script_dir, "test_destination") # define destination directory
-SKIPPED = "skipped_files" # define directory name for skipped files
 
 # create DST path
 if not os.path.isdir(DST):
