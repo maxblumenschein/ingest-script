@@ -4,7 +4,8 @@ import shutil
 import re
 
 from datetime import datetime, timezone
-from variables import match
+from variables import first_characters
+from variables import second_forth_characters
 
 # Get the directory of the main script
 script_dir = os.path.dirname(__file__)
@@ -60,6 +61,46 @@ print(f"{date_isoformat} [info         ] Start ingest process \n"
       f"{date_isoformat} [info         ] Destination directory = {DST}"
     )
 
+# File check
+def is_image_file(file_name):
+    # List of image file extensions
+    image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
+    return file_name.lower().endswith(image_extensions)
+
+def check_segment_length(file_name):
+    # Split the filename on the "_"
+    parts = file_name.split("_")
+    if len(parts) > 3:
+        first_segment = parts[0]
+        second_segment = parts[1]
+        third_segment = parts[2]
+        # Check segment lengths
+        return len(first_segment) == 4 and len(second_segment) == 7 and len(third_segment)
+    return False
+
+def check_first_character(file_name, first_characters):
+    # Check if the first character of the filename is in the first_characters list
+    return file_name[0] in first_characters
+
+def check_second_forth_character(file_name, second_forth_characters):
+    # Check if the first character of the filename is in the first_characters list
+    return file_name[1:].startswith(tuple(second_forth_characters))
+
+def file_check(file_name):
+    if not is_image_file(file_name):
+        return False
+
+    if not check_segment_length(file_name):
+        return False
+
+    if not check_first_character(file_name, first_characters):
+        return False
+
+    if not check_second_forth_character(file_name, second_forth_characters):
+        return False
+
+    return True
+
 # loop on all files and get the folder name that each file is supposed to move to
 for dirpath, dirnames, filenames in os.walk(SRC):
     # skip directories that start with SKIPPED
@@ -70,8 +111,8 @@ for dirpath, dirnames, filenames in os.walk(SRC):
         file_path = os.path.join(dirpath, file_name)
         if file_name == ".DS_Store":
             continue
-        # check with list "match" if it is one of the files we are looking for
-        if any(re.findall('|'.join(match), file_name)):
+        # check if it is one of the files we are looking for
+        if file_check(file_name):
             # extract folder name
             dst_directory_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
             # create folder if it doesn't exist
@@ -88,7 +129,7 @@ for dirpath, dirnames, filenames in os.walk(SRC):
                     os.makedirs(skipped_directory, exist_ok=True)
                 shutil.move(file_path, skipped_directory)
                 print(f"{date_isoformat} [warning      ] {file_name} = [conform      ] ––> SKIPPED already exists in destination directory ––> MOVED to {skipped_directory}")
-        # if file does conform with list "match" move file into SKIPPED path
+        # if file does not conform move file into SKIPPED path
         else:
             if not os.path.isdir(skipped_directory):
                 os.makedirs(skipped_directory, exist_ok=True)
