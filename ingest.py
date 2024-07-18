@@ -22,7 +22,7 @@ if not os.path.isdir(DST):
 # Get the current date and time
 now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
-date_isoformat = now.astimezone().replace(microsecond=0).isoformat()
+date_isoformat = datetime.now(timezone.utc).astimezone().replace(microsecond=0).isoformat()
 
 # Specify the log destination directory and log file name
 log_directory = os.path.join(DST, "log")
