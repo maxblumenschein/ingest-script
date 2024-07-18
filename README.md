@@ -17,11 +17,11 @@ Actions are recorded in a log-file inside the output directory
 
 ## Use
 
-Define input and output directory inside `ìngest.py`:
+Define input and output directory inside `variables.py`:
 
 ```python
-SRC = "path/to/source/directory" # define SRC directory
-DST = "path/to/destination/directory" # define SRC directory
+SRC = "path/to/source/directory" # define source directory
+DST = "path/to/destination/directory" # define destination directory
 ```
 
 The filecheck is made to check basic conformity with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://kunstmuseumbasel.ch/). To adapt the filecheck configure the function `python file_check(file_name)` accordingly.
