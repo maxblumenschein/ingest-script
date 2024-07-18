@@ -24,6 +24,6 @@ SRC = "path/to/source/directory" # define SRC directory
 DST = "path/to/destination/directory" # define SRC directory
 ```
 
-The filecheck is made to check basic conformity with Mediastandard [^1] at [Kunstmuseum Basel](https://kunstmuseumbasel.ch/). To adapt the filecheck configure the function `python file_check(file_name)` accordingly.
+The filecheck is made to check basic conformity with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://kunstmuseumbasel.ch/). To adapt the filecheck configure the function `python file_check(file_name)` accordingly.
 
 [^1]: KMB-Mediastandard 2017 – Version 2.0; extended with a few additional prefixes
