@@ -58,18 +58,42 @@ print(f"{date_isoformat} [info         ] Start ingest process \n"
 # File check
 def is_image_file(file_name):
     # List of image file extensions
-    image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff', '.webp')
+    image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff')
     return file_name.lower().endswith(image_extensions)
 
-def check_segment_length(file_name):
-    # Split the filename on the "_"
-    parts = file_name.split("_")
-    if len(parts) > 3:
-        first_segment = parts[0]
-        second_segment = parts[1]
-        third_segment = parts[2]
-        # Check segment lengths
-        return len(first_segment) == 4 and len(second_segment) == 7 and len(third_segment)
+# check filename for segment syntax
+def check_filename_segments(file_name):
+    base_file_name, _ = os.path.splitext(file_name)
+    segments = base_file_name.split('_')
+    valid_segments = []
+
+    if len(segments) < 3:
+        return False
+
+    second_segment = segments[1]
+    third_segment = segments[2]
+
+    if len(second_segment) == 7:
+        valid_segments.append(second_segment)
+        if len(third_segment) == 8:
+            try:
+                # Check if third segment is a valid date in the format YYYYMMDD
+                datetime.strptime(third_segment, '%Y%m%d')
+                valid_segments.append(third_segment)
+                return True
+            except ValueError:
+                return False  # Not a valid date
+
+    elif len(second_segment) == 4:
+        try:
+            # Check if second segment is a valid year in the format YYYY
+            datetime.strptime(second_segment, '%Y')
+            valid_segments.append(second_segment)
+            if len(third_segment) <= 14:
+                valid_segments.append(third_segment)
+                return True
+        except ValueError:
+            return False
     return False
 
 def check_first_character(file_name, first_characters):
@@ -85,8 +109,8 @@ def file_check(file_name):
         print(f"{date_isoformat} [warning      ] {file_name} = invalid filetype")
         return False
 
-    if not check_segment_length(file_name):
-        print(f"{date_isoformat} [warning      ] {file_name} = invalid segment length")
+    if not check_filename_segments(file_name):
+        print(f"{date_isoformat} [warning      ] {file_name} = invalid segment syntax")
         return False
 
     if not check_first_character(file_name, first_characters):
@@ -120,7 +144,7 @@ for dirpath, dirnames, filenames in os.walk(SRC):
             # if file doesn't already exist move the file
             if not os.path.isfile(os.path.join(dst_directory, file_name)):
                 shutil.move(file_path, dst_directory)
-                print(f"{date_isoformat} [info         ] {file_name} = CONFORM ––> MOVED to {dst_directory}")
+                print(f"{date_isoformat} [info         ] {file_name} = [conform      ] ––> MOVED to {dst_directory}")
             # if file does already exist move file into SKIPPED path
             else:
                 if not os.path.isdir(skipped_directory):
