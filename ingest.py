@@ -3,8 +3,9 @@ import os
 import shutil
 import re
 
-from datetime import datetime, timezone
 from variables import *
+from datetime import datetime, timezone
+from PIL import Image
 
 # Get the directory of the main script
 script_dir = os.path.dirname(__file__)
@@ -104,6 +105,16 @@ def check_second_forth_character(file_name, second_forth_characters):
     # Check if the first character of the filename is in the first_characters list
     return file_name[1:].startswith(tuple(second_forth_characters))
 
+def has_icc_profile(filepath):
+    try:
+        with Image.open(filepath) as img:
+            if img.info.get('icc_profile'):
+                return True
+            else:
+                return False
+    except IOError:
+        return False
+
 def file_check(file_name):
     if not is_image_file(file_name):
         print(f"{date_isoformat} [warning      ] {file_name} = invalid filetype")
@@ -119,6 +130,10 @@ def file_check(file_name):
 
     if not check_second_forth_character(file_name, second_forth_characters):
         print(f"{date_isoformat} [warning      ] {file_name} = invalid prefix")
+        return False
+
+    if not has_icc_profile(file_path):
+        print(f"{date_isoformat} [warning      ] {file_name} = missing ICC profile")
         return False
 
     return True
