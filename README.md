@@ -5,10 +5,12 @@ This Python script moves data from an input directoy to an output directory base
 ## Steps
 
 1. Check filenames for valid
-    1. extension
+    1. prefix
     2. segment length and syntax between delimeters
-    3. prefix
-    4. embedded ICC profile
+    3. id
+    4. date
+    5. extension
+    6. embedded ICC profile
 2. Move valid files into prefix-named folders inside output directory
 3. Move invalid files into skipped-files folder inside input directory
 
