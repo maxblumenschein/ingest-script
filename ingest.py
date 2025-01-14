@@ -62,48 +62,78 @@ def is_image_file(file_name):
     image_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff')
     return file_name.lower().endswith(image_extensions)
 
+def is_valid_id(id_segment):
+    """ Validate individual ID according to the patterns. """
+    valid_initials = ''.join(valid_id_initial_chars)
+    id_pattern = rf"^\d{{7}}$|^[{valid_initials}]\d{{6}}$"  # ID can be 7 digits or 6 digits preceded by valid initial character
+    return re.fullmatch(id_pattern, id_segment) is not None
+
+def is_valid_sub_suffix(sub_suffix):
+    """ Validate each sub-suffix to allow either valid suffixes or a 3-digit serial number. """
+    return sub_suffix in valid_suffixes or re.fullmatch(r"^\d{3}$", sub_suffix) is not None
+
 # check filename for segment syntax
-def check_filename_segments(file_name):
+def is_valid_filename(file_name):
     base_file_name, _ = os.path.splitext(file_name)
     segments = base_file_name.split('_')
     valid_segments = []
 
-    if len(segments) < 3:
+    # Check first segment
+    if len(segments) < 2:
         return False
 
+    first_segment = segments[0]
+    if (len(first_segment) != 4 or
+        first_segment[0] not in valid_first_segment_first_char or
+        first_segment[1:] not in valid_first_segment_other_chars):
+        return False
+
+    # Check second segment (IDs or date)
     second_segment = segments[1]
-    third_segment = segments[2]
+    date_pattern = r"^(xxxx|\d{2}x{2}|\d{3}x{1}|\d{4})-(\d{2}|x{2})-(\d{2}|x{2})$"  # Date format with optional 'x'
 
-    if len(second_segment) == 7:
-        valid_segments.append(second_segment)
-        if len(third_segment) == 8:
-            try:
-                # Check if third segment is a valid date in the format YYYYMMDD
-                datetime.strptime(third_segment, '%Y%m%d')
-                valid_segments.append(third_segment)
-                return True
-            except ValueError:
-                return False  # Not a valid date
-
-    elif len(second_segment) == 4:
-        try:
-            # Check if second segment is a valid year in the format YYYY
-            datetime.strptime(second_segment, '%Y')
-            valid_segments.append(second_segment)
-            if len(third_segment) <= 14:
-                valid_segments.append(third_segment)
-                return True
-        except ValueError:
+    ids_or_date = second_segment.split('-')
+    if len(ids_or_date) > 1:
+        # If multiple IDs are provided, each should be valid
+        if not all(is_valid_id(id_part) for id_part in ids_or_date):
             return False
-    return False
+        is_id = True
+    else:
+        is_id = is_valid_id(second_segment)
+        is_date = re.fullmatch(date_pattern, second_segment)
+        if not is_id and not is_date:
+            return False
 
-def check_first_character(file_name, first_characters):
-    # Check if the first character of the filename is in the first_characters list
-    return file_name[0] in first_characters
+    # Check third segment if second segment is ID(s)
+    if is_id and len(segments) > 2:
+        third_segment = segments[2]
+        if not re.fullmatch(date_pattern, third_segment):
+            return False
 
-def check_second_forth_character(file_name, second_forth_characters):
-    # Check if the first character of the filename is in the first_characters list
-    return file_name[1:].startswith(tuple(second_forth_characters))
+    # Check freetext segment
+    freetext_index = 3 if is_id else 2
+    if len(segments) > freetext_index:
+        freetext_segment = segments[freetext_index]
+        if not re.fullmatch(r"^[a-z][a-z0-9-]*$", freetext_segment):
+            return False
+
+    # Check suffix segment
+    suffix_index = freetext_index + 1 if len(segments) > freetext_index else freetext_index
+    if len(segments) > suffix_index:
+        suffix_segment = segments[suffix_index]
+
+        # Ensure the suffix segment starts with "s-"
+        if not suffix_segment.startswith("s-"):
+            return False
+
+        # Split the suffix segment into sub-suffixes based on the "-" delimiter
+        sub_suffixes = suffix_segment[2:].split("-")
+
+        # Validate each sub-suffix
+        if any(not is_valid_sub_suffix(sub_suffix) for sub_suffix in sub_suffixes):
+            return False
+
+    return True
 
 def has_icc_profile(filepath):
     try:
@@ -120,16 +150,8 @@ def file_check(file_name):
         print(f"{date_isoformat} [warning      ] {file_name} = invalid filetype")
         return False
 
-    if not check_filename_segments(file_name):
-        print(f"{date_isoformat} [warning      ] {file_name} = invalid segment syntax")
-        return False
-
-    if not check_first_character(file_name, first_characters):
-        print(f"{date_isoformat} [warning      ] {file_name} = invalid prefix")
-        return False
-
-    if not check_second_forth_character(file_name, second_forth_characters):
-        print(f"{date_isoformat} [warning      ] {file_name} = invalid prefix")
+    if not is_valid_filename(file_name):
+        print(f"{date_isoformat} [warning      ] {file_name} = invalid filename")
         return False
 
     if not has_icc_profile(file_path):
