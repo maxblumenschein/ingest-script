@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Get the directory of the script
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Change to the script's directory
+cd "$SCRIPT_DIR"
+
+# Execute the Pandoc command
+python3 "./ingest.py"
+
+# Close the terminal after successful execution
+exit
