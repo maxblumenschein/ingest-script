@@ -83,8 +83,7 @@ def file_check(file_name):
 
 def process_files():
     skipped_directory = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
-    os.makedirs(skipped_directory, exist_ok=True)
-
+    skipped_files = []
     valid_files = []
 
     for dirpath, _, filenames in os.walk(SRC):
@@ -98,7 +97,12 @@ def process_files():
             if file_check(file_name):
                 valid_files.append((file_name, file_path))
             else:
-                move_file(file_path, skipped_directory, "Moved to skipped")
+                skipped_files.append(file_path)
+
+    if skipped_files:
+        os.makedirs(skipped_directory, exist_ok=True)
+        for file_path in skipped_files:
+            move_file(file_path, skipped_directory, "Moved to skipped")
 
     for file_name, file_path in valid_files:
         dst_directory_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
@@ -108,9 +112,14 @@ def process_files():
 
         if os.path.exists(dst_file_path):
             logging.warning(f"{file_name} already exists at destination, moving to skipped folder.")
+            if not skipped_files:
+                os.makedirs(skipped_directory, exist_ok=True)
             move_file(file_path, skipped_directory, "Moved to skipped (file already exists)")
         else:
             move_file(file_path, dst_directory, "Moved to destination")
+
+    if os.path.exists(skipped_directory) and not os.listdir(skipped_directory):
+        os.rmdir(skipped_directory)
 
 def main():
     process_files()
