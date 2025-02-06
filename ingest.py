@@ -81,6 +81,17 @@ def file_check(file_name):
         return False
     return True
 
+def delete_empty_dirs(root_dir):
+    for dirpath, dirnames, filenames in os.walk(root_dir, topdown=False):
+        if not dirnames and not filenames:  # Empty directory
+            dir_name = os.path.basename(dirpath)
+            if not dir_name.startswith(("skipped", "log")):
+                try:
+                    os.rmdir(dirpath)
+                    logging.info(f"Deleted empty directory: {dirpath}")
+                except OSError as e:
+                    logging.error(f"Failed to delete {dirpath}: {e}")
+
 def process_files():
     skipped_directory = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
     skipped_files = []
@@ -120,6 +131,8 @@ def process_files():
 
     if os.path.exists(skipped_directory) and not os.listdir(skipped_directory):
         os.rmdir(skipped_directory)
+
+    delete_empty_dirs(SRC)  # Delete empty directories after processing
 
 def main():
     process_files()
