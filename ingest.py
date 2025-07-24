@@ -188,7 +188,7 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name):
         os.makedirs(dst_directory, exist_ok=True)
         dst_jpg_path = os.path.join(dst_directory, os.path.splitext(file_name)[0] + ".jpg")
 
-        converted.save(dst_jpg_path, "JPEG", quality=95,
+        converted.save(dst_jpg_path, "JPEG", quality=98,
                        icc_profile=converted.info.get('icc_profile', b''))
         logging.info(f"{file_name}: Saved JPG derivative with embedded sRGB: {dst_jpg_path}")
 

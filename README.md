@@ -9,8 +9,11 @@ This Python script moves data from an input directoy to an output directory base
     2. segment length and syntax between delimeters
     3. id
     4. date
-    5. extension
+    5. free-text
+    6. suffix
+    7. extension
 2. Move valid files into prefix-named folders inside output directory
+3. Create specified derivate (`.jpg`, `sRGB`) files from valid primary files
 3. Move invalid files into skipped-files folder inside input directory
 
 ## Logging
