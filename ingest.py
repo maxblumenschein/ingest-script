@@ -3,8 +3,10 @@ import os
 import shutil
 import re
 from datetime import datetime, timezone
-from PIL import Image
+from PIL import Image, ImageCms
+import io
 import logging
+import subprocess
 
 from variables import SRC, DST, SKIPPED, valid_id_initial_chars, valid_suffixes, valid_first_segment_first_char, valid_first_segment_other_chars
 
@@ -12,7 +14,6 @@ IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff')
 
 now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
-
 date_isoformat = now.replace(microsecond=0).isoformat()
 
 log_directory = os.path.join(DST, "log")
@@ -48,8 +49,6 @@ def is_valid_second_segment(date_segment):
 def is_valid_id(id_segment):
     valid_initials = ''.join(valid_id_initial_chars)
     id_pattern = rf"^\d{{7}}$|^[{valid_initials}]\d{{6}}$"
-
-    # Split by "-" and validate each part
     parts = id_segment.split('-')
     return all(re.fullmatch(id_pattern, part) for part in parts)
 
@@ -59,17 +58,14 @@ def is_valid_freetext_segment(freetext_segment):
 def is_valid_suffix_segment(suffix_segment):
     if not suffix_segment.startswith("s-"):
         return False
-
     parts = suffix_segment[2:].split("-")
-
     for sub in parts:
         if sub in valid_suffixes:
             continue
-        elif re.fullmatch(r"\d{3}", sub):  # allow 3-digit serials like 001, 123
+        elif re.fullmatch(r"\d{3}", sub):
             continue
         else:
             return False
-
     return True
 
 def is_valid_filename(file_name):
@@ -80,48 +76,35 @@ def is_valid_filename(file_name):
         logging.warning(f"{file_name}: Too few segments")
         return False, True
 
-    # First segment: always required
     if not is_valid_first_segment(segments[0]):
         logging.warning(f"{file_name}: Invalid first segment")
         return False, True
 
     idx = 1
 
-    # Optional: ID segment
-    if len(segments) > 1 and is_valid_id(segments[1]):
-        idx += 1
-    else:
-        if not is_valid_second_segment(segments[1]):
-            logging.warning(f"{file_name}: Missing or invalid date segment")
-            return False, True
+    # Optional ID segment
+    if len(segments) > idx and is_valid_id(segments[idx]):
         idx += 1
 
-    # Mandatory: date segment
+    # Mandatory date segment
     if len(segments) <= idx or not is_valid_second_segment(segments[idx]):
         logging.warning(f"{file_name}: Missing or invalid date segment")
         return False, True
     idx += 1
 
-    # Optional: freetext
-    if len(segments) > idx:
-        if not is_valid_freetext_segment(segments[idx]):
-            logging.warning(f"{file_name}: Invalid freetext segment")
-            return False, True
+    # Optional freetext
+    if len(segments) > idx and is_valid_freetext_segment(segments[idx]):
         idx += 1
 
-    # Optional: suffix
-    if len(segments) > idx:
-        if not is_valid_suffix_segment(segments[idx]):
-            logging.warning(f"{file_name}: Invalid suffix segment")
-            return False, True
+    # Optional suffix
+    if len(segments) > idx and is_valid_suffix_segment(segments[idx]):
         idx += 1
 
-    # No more segments should exist
     if len(segments) > idx:
         logging.warning(f"{file_name}: Too many segments")
         return False, True
 
-    return False, True
+    return True, False
 
 def file_check(file_name):
     if not is_image_file(file_name):
@@ -134,7 +117,7 @@ def file_check(file_name):
 
 def delete_empty_dirs(root_dir):
     for dirpath, dirnames, filenames in os.walk(root_dir, topdown=False):
-        if not dirnames and not filenames:  # Empty directory
+        if not dirnames and not filenames:
             dir_name = os.path.basename(dirpath)
             if not dir_name.startswith(("skipped", "log")):
                 try:
@@ -142,6 +125,78 @@ def delete_empty_dirs(root_dir):
                     logging.info(f"Deleted empty directory: {dirpath}")
                 except OSError as e:
                     logging.error(f"Failed to delete {dirpath}: {e}")
+
+def copy_metadata_with_exiftool(src_path, dst_path):
+    try:
+        subprocess.run([
+            "exiftool",
+            "-overwrite_original",
+            "-TagsFromFile", src_path,
+            "-All:All",
+            dst_path
+        ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        logging.info(f"Copied metadata from {src_path} to {dst_path} using exiftool.")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"ExifTool failed for {src_path}: {e.stderr.decode().strip()}")
+    except FileNotFoundError:
+        logging.error("ExifTool not found. Please install it and ensure it's in the system PATH.")
+
+def convert_to_srgb(img):
+    icc_bytes = img.info.get('icc_profile')
+    srgb_icc_path = os.path.join(os.path.dirname(__file__), 'resources', 'sRGB_v4_ICC_preference.icc')
+
+    try:
+        srgb_profile = ImageCms.ImageCmsProfile(srgb_icc_path)
+        srgb_icc_bytes = srgb_profile.tobytes()
+
+        if icc_bytes:
+            input_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc_bytes))
+            profile_name = ImageCms.getProfileName(input_profile)
+            logging.info(f"Source ICC profile: {profile_name}")
+
+            img = ImageCms.profileToProfile(img, input_profile, srgb_profile, outputMode='RGB')
+            img.info['icc_profile'] = srgb_icc_bytes
+        else:
+            logging.info("No ICC profile embedded; assuming source is sRGB and embedding sRGB profile.")
+            img.info['icc_profile'] = srgb_icc_bytes
+
+    except Exception as e:
+        logging.error(f"ICC conversion failed: {e}")
+        raise
+
+    return img
+
+def create_jpg_derivative(src_image_path, dst_directory, file_name):
+    try:
+        original = Image.open(src_image_path)
+        original = original.convert("RGB")
+
+        original_icc = original.info.get('icc_profile', b'')
+
+        try:
+            converted = convert_to_srgb(original.copy())
+            converted_icc = converted.info.get('icc_profile', b'')
+
+            if original_icc != converted_icc:
+                logging.info(f"{file_name}: ICC profile was converted to sRGB.")
+            else:
+                logging.info(f"{file_name}: ICC profile unchanged; already sRGB or assumed sRGB.")
+        except Exception as e:
+            logging.error(f"{file_name}: Failed to convert ICC profile to sRGB: {e}")
+            return  # Skip saving if conversion fails
+
+        os.makedirs(dst_directory, exist_ok=True)
+        dst_jpg_path = os.path.join(dst_directory, os.path.splitext(file_name)[0] + ".jpg")
+
+        converted.save(dst_jpg_path, "JPEG", quality=95,
+                       icc_profile=converted.info.get('icc_profile', b''))
+        logging.info(f"{file_name}: Saved JPG derivative with embedded sRGB: {dst_jpg_path}")
+
+        copy_metadata_with_exiftool(src_image_path, dst_jpg_path)
+
+    except Exception as e:
+        logging.error(f"{file_name}: Failed to create JPG derivative: {e}")
+
 
 def process_files():
     skipped_directory = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
@@ -167,10 +222,14 @@ def process_files():
             move_file(file_path, skipped_directory, "Moved to skipped")
 
     for file_name, file_path in valid_files:
-        dst_directory_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
-        dst_directory = os.path.join(DST, dst_directory_name)
-        os.makedirs(dst_directory, exist_ok=True)
-        dst_file_path = os.path.join(dst_directory, file_name)
+        subdir_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
+
+        primary_directory = os.path.join(DST, "primary", subdir_name)
+        derivative_directory = os.path.join(DST, "derivative", subdir_name)
+
+        dst_file_path = os.path.join(primary_directory, file_name)
+        os.makedirs(primary_directory, exist_ok=True)
+        os.makedirs(derivative_directory, exist_ok=True)
 
         if os.path.exists(dst_file_path):
             logging.warning(f"{file_name} already exists at destination, moving to skipped folder.")
@@ -178,12 +237,14 @@ def process_files():
                 os.makedirs(skipped_directory, exist_ok=True)
             move_file(file_path, skipped_directory, "Moved to skipped (file already exists at destination)")
         else:
-            move_file(file_path, dst_directory, "Moved to destination")
+            move_file(file_path, primary_directory, "Moved to primary destination")
+            full_dst_path = os.path.join(primary_directory, file_name)
+            create_jpg_derivative(full_dst_path, derivative_directory, file_name)
 
     if os.path.exists(skipped_directory) and not os.listdir(skipped_directory):
         os.rmdir(skipped_directory)
 
-    delete_empty_dirs(SRC)  # Delete empty directories after processing
+    delete_empty_dirs(SRC)
 
 def main():
     process_files()
