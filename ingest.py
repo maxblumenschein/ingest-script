@@ -54,6 +54,8 @@ def is_valid_id(id_segment):
     return all(re.fullmatch(id_pattern, part) for part in parts)
 
 def is_valid_freetext_segment(freetext_segment):
+    if freetext_segment.startswith("s-"):
+        return False
     return re.fullmatch(r"^[a-z0-9][a-z0-9-]*$", freetext_segment) is not None
 
 def is_valid_suffix_segment(suffix_segment):
