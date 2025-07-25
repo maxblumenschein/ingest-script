@@ -31,4 +31,15 @@ DST = "path/to/destination/directory" # define destination directory
 
 The filecheck is made to check basic conformity with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/). To adapt the filecheck configure the function `python is_valid_filename(file_name)` inside `ìngest.py` accordingly.
 
+### General dependencies
+
+1. Install Pillow: `pip install pillow`
+
+2. Install exiftool:
+    * **macOS**: `brew install exiftool`
+    * **Ubuntu/Debian**: `sudo apt install libimage-exiftool-perl`
+    * **Windows**:
+        1. Download and extract https://exiftool.org/
+        2. Add to `PATH` manually
+
 [^1]: KMB-Mediastandard Version 3.0, 2024.
