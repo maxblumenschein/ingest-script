@@ -17,7 +17,7 @@ now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
 date_isoformat = now.replace(microsecond=0).isoformat()
 
-log_directory = os.path.join(DST, "log")
+log_directory = os.path.join(DST, "__log__")
 os.makedirs(log_directory, exist_ok=True)
 log_file_name = f"script_{date_suffix}.log"
 log_path = os.path.join(log_directory, log_file_name)
