@@ -233,13 +233,14 @@ def get_destination_subdir(file_name):
     base_file_name, _ = os.path.splitext(file_name)
     segments = base_file_name.split('_')
 
-    # Default to no ID
+    # Default category and subdir
     category_dir = "noIDs"
     subdir_name = segments[0][1:4] if len(segments[0]) >= 4 else segments[0][1:]
 
     if len(segments) > 1 and is_valid_id(segments[1]):
         category_dir = "IDs"
-        subdir_name = segments[1].replace("-", "")
+        first_id = segments[1].split('-')[0]  # Use only the first ID
+        subdir_name = first_id
 
     return category_dir, subdir_name
 
@@ -275,24 +276,10 @@ def process_files():
             move_file(file_path, skipped_directory, "Missing required metadata")
             continue
 
-        # Determine subfolder based on ID presence
-        base_file_name, _ = os.path.splitext(file_name)
-        segments = base_file_name.split('_')
-
-        # Default to no ID
-        category_dir = "noIDs"
-        subdir_name = segments[0][1:4] if len(segments[0]) >= 4 else segments[0][1:]
-
-        # Check for ID
-        if len(segments) > 1 and is_valid_id(segments[1]):
-            category_dir = "IDs"
-            subdir_name = segments[1].replace("-", "")
-
         category_dir, subdir_name = get_destination_subdir(file_name)
 
         primary_directory = os.path.join(DST, "primary", category_dir, subdir_name)
         derivative_directory = os.path.join(DST, "derivative", category_dir, subdir_name)
-
 
         dst_file_path = os.path.join(primary_directory, file_name)
         os.makedirs(primary_directory, exist_ok=True)
