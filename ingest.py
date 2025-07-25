@@ -7,8 +7,9 @@ from PIL import Image, ImageCms
 import io
 import logging
 import subprocess
+import json
 
-from variables import SRC, DST, SKIPPED, valid_id_initial_chars, valid_suffixes, valid_first_segment_first_char, valid_first_segment_other_chars
+from variables import SRC, DST, SKIPPED, valid_id_initial_chars, valid_suffixes, valid_first_segment_first_char, valid_first_segment_other_chars, required_metadata_tags
 
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff')
 
@@ -106,6 +107,37 @@ def is_valid_filename(file_name):
 
     return True, False
 
+def get_metadata_tags(file_path):
+    try:
+        # Run exiftool to get JSON output
+        result = subprocess.run(
+            ['exiftool', '-j', file_path],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        metadata_list = json.loads(result.stdout)
+        if metadata_list:
+            return metadata_list[0]  # first dict in list contains metadata
+        return {}
+    except Exception as e:
+        logging.error(f"Failed to get metadata for {file_path}: {e}")
+        return {}
+
+def missing_required_metadata(metadata):
+    missing = []
+    for tag in required_metadata_tags:
+        if tag not in metadata or not metadata[tag]:
+            missing.append(tag)
+    return missing
+
+def has_required_metadata(metadata):
+    missing = missing_required_metadata(metadata)
+    if missing:
+        logging.warning(f"Missing required metadata tags: {', '.join(missing)}")
+        return False
+    return True
+
 def file_check(file_name):
     if not is_image_file(file_name):
         logging.warning(f"{file_name}: Invalid file type")
@@ -200,6 +232,7 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name):
 
 def process_files():
     skipped_directory = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
+    os.makedirs(skipped_directory, exist_ok=True)  # Create skipped directory once here
     skipped_files = []
     valid_files = []
 
@@ -217,11 +250,18 @@ def process_files():
                 skipped_files.append(file_path)
 
     if skipped_files:
-        os.makedirs(skipped_directory, exist_ok=True)
         for file_path in skipped_files:
             move_file(file_path, skipped_directory, "Moved to skipped")
 
     for file_name, file_path in valid_files:
+        # Check for required metadata before proceeding
+        metadata = get_metadata_tags(file_path)
+        if not has_required_metadata(metadata):
+            if not os.path.exists(skipped_directory):
+                os.makedirs(skipped_directory, exist_ok=True)
+            move_file(file_path, skipped_directory, "Missing required metadata")
+            continue
+
         subdir_name = file_name[1:4] if len(file_name) > 3 else file_name[1:]
 
         primary_directory = os.path.join(DST, "primary", subdir_name)

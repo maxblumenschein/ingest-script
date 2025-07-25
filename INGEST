@@ -6,8 +6,30 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # Change to the script's directory
 cd "$SCRIPT_DIR"
 
-# Execute the Pandoc command
+# Name of the virtual environment directory
+VENV_DIR="venv"
+
+# Check if the virtual environment folder exists
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv "$VENV_DIR"
+fi
+
+# Activate the virtual environment
+# shellcheck disable=SC1091
+source "$VENV_DIR/bin/activate"
+
+# Upgrade pip inside the venv
+pip install --upgrade pip
+
+# Install required Python packages (add more to requirements if needed)
+pip install Pillow
+
+# Run the Python script inside the venv
 python3 "./ingest.py"
 
-# Close the terminal after successful execution
+# Deactivate virtual environment after execution
+deactivate
+
+# Exit the terminal (optional, depends on how you run this script)
 exit
