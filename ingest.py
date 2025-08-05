@@ -309,10 +309,10 @@ def missing_required_metadata(metadata):
             missing.append(tag)
     return missing
 
-def has_required_metadata(metadata):
+def has_required_metadata(metadata, file_name):
     missing = missing_required_metadata(metadata)
     if missing:
-        logging.warning(f"Missing required metadata tags: {', '.join(missing)}")
+        logging.warning(f"{file_name}: Missing required metadata tags: {', '.join(missing)}")
         return False
     return True
 
@@ -351,48 +351,57 @@ def copy_metadata_with_exiftool(src_path, dst_path):
     except FileNotFoundError:
         logging.error("ExifTool not found. Please install it and ensure it's in the system PATH.")
 
-def convert_to_srgb(img, file_name):
+def convert_to_target_profile(img, file_name):
     icc_bytes = img.info.get('icc_profile')
-    srgb_icc_path = os.path.join(os.path.dirname(__file__), 'resources', 'sRGB_IEC61966-2-1.icc')
+    mode = img.mode
+
+    base_dir = os.path.dirname(__file__)
+    srgb_icc_path = os.path.join(base_dir, 'resources', 'sRGB_IEC61966-2-1.icc')
+    gray_icc_path = os.path.join(base_dir, 'resources', 'Gray-Gamma-2-2.icc')
 
     try:
-        srgb_profile = ImageCms.ImageCmsProfile(srgb_icc_path)
-        srgb_icc_bytes = srgb_profile.tobytes()
+        if mode == 'L':
+            target_profile = ImageCms.ImageCmsProfile(gray_icc_path)
+        else:
+            target_profile = ImageCms.ImageCmsProfile(srgb_icc_path)
+
+        target_icc_bytes = target_profile.tobytes()
 
         if icc_bytes:
             input_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc_bytes))
             profile_name = ImageCms.getProfileName(input_profile).strip()
             logging.info(f"{file_name}: Source ICC profile: {profile_name}")
 
-            img = ImageCms.profileToProfile(img, input_profile, srgb_profile, outputMode='RGB')
-            img.info['icc_profile'] = srgb_icc_bytes
+            converted = ImageCms.profileToProfile(img, input_profile, target_profile, outputMode=mode)
+            converted.info['icc_profile'] = target_icc_bytes
         else:
-            logging.info("No ICC profile embedded; assuming source is sRGB and embedding sRGB profile.")
-            img.info['icc_profile'] = srgb_icc_bytes
+            logging.info(f"{file_name}: No ICC profile embedded; assuming source is target and embedding target profile.")
+            img.info['icc_profile'] = target_icc_bytes
+            converted = img
+
+        return converted
 
     except Exception as e:
-        logging.error(f"ICC conversion failed: {e}")
+        logging.error(f"{file_name}: ICC conversion failed: {e}")
         raise
-
-    return img
 
 def create_jpg_derivative(src_image_path, dst_directory, file_name):
     try:
         original = Image.open(src_image_path)
-        original = original.convert("RGB")
+        original = original.convert("RGB" if original.mode != 'L' else 'L')
 
         original_icc = original.info.get('icc_profile', b'')
 
         try:
-            converted = convert_to_srgb(original.copy(), file_name)
+            converted = convert_to_target_profile(original.copy(), file_name)
             converted_icc = converted.info.get('icc_profile', b'')
 
             if original_icc != converted_icc:
-                logging.info(f"{file_name}: ICC profile was converted to sRGB.")
+                logging.info(f"{file_name}: ICC profile was converted to target.")
             else:
-                logging.info(f"{file_name}: ICC profile unchanged; already sRGB or assumed sRGB.")
+                logging.info(f"{file_name}: ICC profile unchanged; already target or assumed target.")
         except Exception as e:
-            logging.error(f"{file_name}: Failed to convert ICC profile to sRGB: {e}")
+            logging.error(f"{file_name}: Failed to convert ICC profile: {e}")
             return  # Skip saving if conversion fails
 
         os.makedirs(dst_directory, exist_ok=True)
@@ -400,7 +409,7 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name):
 
         converted.save(dst_jpg_path, "JPEG", quality=98,
                        icc_profile=converted.info.get('icc_profile', b''))
-        logging.info(f"{file_name}: Saved JPG derivative with embedded sRGB: {dst_jpg_path}")
+        logging.info(f"{file_name}: Saved JPG derivative with embedded profile: {dst_jpg_path}")
 
         copy_metadata_with_exiftool(src_image_path, dst_jpg_path)
 
@@ -455,7 +464,7 @@ def process_files(dry_run=False):
                 skipped_files.append((file_path, "Metadata read error"))
                 continue
 
-            if not has_required_metadata(metadata):
+            if not has_required_metadata(metadata, file_name):
                 skipped_files.append((file_path, "Missing required metadata"))
                 continue
 
