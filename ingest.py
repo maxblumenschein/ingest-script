@@ -33,32 +33,157 @@ def move_file(src, dst, reason):
         logging.info(f"Moved: {src} -> {dst} ({reason})")
     except shutil.Error as e:
         logging.error(f"Error moving {src} to {dst}: {e}")
+        raise  # re-raise to let the caller handle it
 
 def is_image_file(file_name):
+    """
+    Is valid image file name
+
+    >>> is_image_file("a.jpg")
+    True
+    >>> is_image_file("a.txt")
+    False
+    """
     return file_name.lower().endswith(IMAGE_EXTENSIONS)
 
 def is_valid_first_segment(first_segment):
+    """
+    Validate the first segment of the filename.
+
+    A valid first segment:
+    - Is exactly 4 characters long
+    - Starts with a character from `valid_first_segment_first_char`
+    - Followed by 3 characters from `valid_first_segment_other_chars`
+
+    Parameters:
+        first_segment (str): The first segment of the filename.
+
+    Returns:
+        bool: True if the segment is valid, False otherwise.
+
+    Example:
+    >>> valid_first_segment_first_char = {'g'}
+    >>> valid_first_segment_other_chars = {'w1r'}
+    >>> is_valid_first_segment("gw1r")
+    True
+    >>> is_valid_first_segment("xx12")
+    False
+    """
     return len(first_segment) == 4 and first_segment[0] in valid_first_segment_first_char and first_segment[1:] in valid_first_segment_other_chars
 
-def is_valid_second_segment(date_segment):
+def is_valid_date_segment(date_segment):
+    """
+    Validate a date segment in the format YYYY-MM-DD.
+
+    Parameters:
+        date_segment (str): The date string to validate.
+
+    Returns:
+        bool: True if the date is valid and correctly formatted, False otherwise.
+
+    Example:
+    >>> is_valid_date_segment("2024-12-31")
+    True
+    >>> is_valid_date_segment("2024-13-01")
+    False
+    >>> is_valid_date_segment("2024-02-30")
+    False
+    """
     try:
         datetime.strptime(date_segment, "%Y-%m-%d")
         return True
     except ValueError:
         return False
 
-def is_valid_id(id_segment):
+def is_valid_id_segment(id_segment):
+    """
+    Validate the ID segment of the filename.
+
+    A valid ID segment:
+    - May consist of one or more parts separated by dashes
+    - Each part must be either:
+        - 7 digits (e.g., '0098163')
+        - 1 character from `valid_id_initial_chars` followed by 6 digits (e.g., 'a001285')
+
+    Parameters:
+        id_segment (str): The ID string to validate.
+
+    Returns:
+        bool: True if the ID segment is valid, False otherwise.
+
+    Example:
+    >>> valid_id_initial_chars = {'a', 'b'}
+    >>> is_valid_id_segment("0098163")
+    True
+    >>> is_valid_id_segment("a001285")
+    True
+    >>> is_valid_id_segment("x001285")
+    False
+    >>> is_valid_id_segment("a001285-0098163")
+    True
+    """
     valid_initials = ''.join(valid_id_initial_chars)
     id_pattern = rf"^\d{{7}}$|^[{valid_initials}]\d{{6}}$"
     parts = id_segment.split('-')
     return all(re.fullmatch(id_pattern, part) for part in parts)
 
 def is_valid_freetext_segment(freetext_segment):
+    """
+    Validate a freetext segment of the filename.
+
+    A valid freetext segment:
+    - Must not start with 's-'
+    - Must consist of lowercase letters, digits, and dashes
+    - Must start with a letter or digit
+
+    Parameters:
+        freetext_segment (str): The freetext segment to validate.
+
+    Returns:
+        bool: True if the freetext segment is valid, False otherwise.
+
+    Example:
+    >>> is_valid_freetext_segment("freetext")
+    True
+    >>> is_valid_freetext_segment("text-123")
+    True
+    >>> is_valid_freetext_segment("s-dt")
+    False
+    >>> is_valid_freetext_segment("-bad")
+    False
+    """
     if freetext_segment.startswith("s-"):
         return False
     return re.fullmatch(r"^[a-z0-9][a-z0-9-]*$", freetext_segment) is not None
 
 def is_valid_suffix_segment(suffix_segment):
+    """
+    Validate whether a suffix segment is correctly formatted.
+
+    A valid suffix segment:
+    - Starts with 's-'
+    - Is followed by one or more parts separated by dashes
+    - Each part must be either:
+        - A known valid suffix (from `valid_suffixes`)
+        - A 3-digit number (e.g., '001')
+
+    Parameters:
+        suffix_segment (str): The suffix segment string to validate.
+
+    Returns:
+        bool: True if the suffix segment is valid, False otherwise.
+
+    Example:
+    >>> valid_suffixes = {'dt', 'note'}
+    >>> is_valid_suffix_segment('s-dt')
+    True
+    >>> is_valid_suffix_segment('s-123-note')
+    True
+    >>> is_valid_suffix_segment('s-xyz')
+    False
+    >>> is_valid_suffix_segment('dt')
+    False
+    """
     if not suffix_segment.startswith("s-"):
         return False
     parts = suffix_segment[2:].split("-")
@@ -71,6 +196,11 @@ def is_valid_suffix_segment(suffix_segment):
             return False
     return True
 
+def pad_array(arr, size, fill=None):
+    """Pads arr to at least `size` elements and keeps the rest in tail."""
+    padded = arr[:size] + [fill] * (size - len(arr))
+    return padded + arr[size:]
+
 def is_valid_filename(file_name):
     base_file_name, _ = os.path.splitext(file_name)
     segments = base_file_name.split('_')
@@ -79,31 +209,50 @@ def is_valid_filename(file_name):
         logging.warning(f"{file_name}: Too few segments")
         return False, True
 
-    if not is_valid_first_segment(segments[0]):
+    first_segment = segments[0]
+    if not is_valid_first_segment(first_segment):
         logging.warning(f"{file_name}: Invalid first segment")
         return False, True
 
-    idx = 1
+    remaining_segments = segments[1:]
 
-    # Optional ID segment
-    if len(segments) > idx and is_valid_id(segments[idx]):
-        idx += 1
+    if not remaining_segments:
+        logging.warning(f"{file_name}: Missing segments after first")
+        return False, True
 
-    # Mandatory date segment
-    if len(segments) <= idx or not is_valid_second_segment(segments[idx]):
+    if is_valid_id_segment(remaining_segments[0]):
+        if len(remaining_segments) < 2:
+            logging.warning(f"{file_name}: Missing date after ID segment")
+            return False, True
+        id_segment, date_segment, *optional_segments = remaining_segments
+    else:
+        date_segment, *optional_segments = remaining_segments
+
+    if not is_valid_date_segment(date_segment):
         logging.warning(f"{file_name}: Missing or invalid date segment")
         return False, True
-    idx += 1
 
-    # Optional freetext
-    if len(segments) > idx and is_valid_freetext_segment(segments[idx]):
-        idx += 1
+    if optional_segments:
+        if is_valid_suffix_segment(optional_segments[0]):
+            if len(optional_segments) != 1:
+                logging.warning(f"{file_name}: No segment allowed after suffix segment.")
+                return False, True
+            if not is_valid_suffix_segment(optional_segments[0]):
+                logging.warning(f"{file_name}: Invalid suffix segment")
+                return False, True
+            return True, False
 
-    # Optional suffix
-    if len(segments) > idx and is_valid_suffix_segment(segments[idx]):
-        idx += 1
+    freetext_segment, suffix_segment, *tail = pad_array(optional_segments, 2, None)
 
-    if len(segments) > idx:
+    if freetext_segment and not is_valid_freetext_segment(freetext_segment):
+        logging.warning(f"{file_name}: Invalid freetext segment")
+        return False, True
+
+    if suffix_segment and not is_valid_suffix_segment(suffix_segment):
+        logging.warning(f"{file_name}: Invalid suffix segment")
+        return False, True
+
+    if tail:
         logging.warning(f"{file_name}: Too many segments")
         return False, True
 
@@ -124,9 +273,32 @@ def get_metadata_tags(file_path):
         return {}
     except Exception as e:
         logging.error(f"Failed to get metadata for {file_path}: {e}")
-        return {}
+        raise MetadataReadError(f"Could not read metadata from {file_path}") from e
 
 def missing_required_metadata(metadata):
+    """
+    Check which required metadata tags are missing or empty.
+
+    This function compares the input metadata dictionary against the
+    globally defined `required_metadata_tags` list. It returns a list
+    of tags that are either missing or have empty values (e.g., None, '', etc.).
+
+    Parameters:
+        metadata (dict): Dictionary of metadata key-value pairs.
+
+    Returns:
+        list[str]: List of missing or empty required metadata tags.
+
+    Example:
+    >>> required_metadata_tags = ['DateTimeOriginal', 'CameraModel', 'Artist']
+    >>> metadata = {
+    ...     'DateTimeOriginal': '2023:05:01 12:00:00',
+    ...     'CameraModel': '',
+    ...     'SomeOtherTag': 'Value'
+    ... }
+    >>> missing_required_metadata(metadata)
+    ['CameraModel', 'Artist']
+    """
     missing = []
     for tag in required_metadata_tags:
         if tag not in metadata or not metadata[tag]:
@@ -177,7 +349,7 @@ def copy_metadata_with_exiftool(src_path, dst_path):
 
 def convert_to_srgb(img):
     icc_bytes = img.info.get('icc_profile')
-    srgb_icc_path = os.path.join(os.path.dirname(__file__), 'resources', 'sRGB_v4_ICC_preference.icc')
+    srgb_icc_path = os.path.join(os.path.dirname(__file__), 'resources', 'sRGB_IEC61966-2-1.icc')
 
     try:
         srgb_profile = ImageCms.ImageCmsProfile(srgb_icc_path)
@@ -239,7 +411,7 @@ def get_destination_subdir(file_name):
     category_dir = "noIDs"
     subdir_name = segments[0][1:4] if len(segments[0]) >= 4 else segments[0][1:]
 
-    if len(segments) > 1 and is_valid_id(segments[1]):
+    if len(segments) > 1 and is_valid_id_segment(segments[1]):
         category_dir = "IDs"
         first_id = segments[1].split('-')[0]  # Use only the first ID
         subdir_name = first_id
