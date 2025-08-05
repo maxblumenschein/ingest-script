@@ -27,7 +27,11 @@ logging.info("Start ingest process")
 logging.info(f"Source directory = {SRC}")
 logging.info(f"Destination directory = {DST}")
 
-def move_file(src, dst, reason):
+def move_file(src, dst, reason, dry_run=False):
+    if dry_run:
+        logging.info("Dry-run mode enabled: no files will be moved or modified.")
+        logging.info(f"[DRY-RUN] Would move: {src} -> {dst} ({reason})")
+        return
     try:
         shutil.move(src, dst)
         logging.info(f"Moved: {src} -> {dst} ({reason})")
@@ -347,7 +351,7 @@ def copy_metadata_with_exiftool(src_path, dst_path):
     except FileNotFoundError:
         logging.error("ExifTool not found. Please install it and ensure it's in the system PATH.")
 
-def convert_to_srgb(img):
+def convert_to_srgb(img, file_name):
     icc_bytes = img.info.get('icc_profile')
     srgb_icc_path = os.path.join(os.path.dirname(__file__), 'resources', 'sRGB_IEC61966-2-1.icc')
 
@@ -357,8 +361,8 @@ def convert_to_srgb(img):
 
         if icc_bytes:
             input_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc_bytes))
-            profile_name = ImageCms.getProfileName(input_profile)
-            logging.info(f"Source ICC profile: {profile_name}")
+            profile_name = ImageCms.getProfileName(input_profile).strip()
+            logging.info(f"{file_name}: Source ICC profile: {profile_name}")
 
             img = ImageCms.profileToProfile(img, input_profile, srgb_profile, outputMode='RGB')
             img.info['icc_profile'] = srgb_icc_bytes
@@ -380,7 +384,7 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name):
         original_icc = original.info.get('icc_profile', b'')
 
         try:
-            converted = convert_to_srgb(original.copy())
+            converted = convert_to_srgb(original.copy(), file_name)
             converted_icc = converted.info.get('icc_profile', b'')
 
             if original_icc != converted_icc:
@@ -418,64 +422,94 @@ def get_destination_subdir(file_name):
 
     return category_dir, subdir_name
 
-def process_files():
+class PlannedOperation:
+    def __init__(self, src_path, dst_path, file_name, derivative_dir):
+        self.src_path = src_path
+        self.dst_path = dst_path
+        self.file_name = file_name
+        self.derivative_dir = derivative_dir
+
+def process_files(dry_run=False):
     skipped_directory = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
-    os.makedirs(skipped_directory, exist_ok=True)  # Create skipped directory once here
+    os.makedirs(skipped_directory, exist_ok=True)
+
     skipped_files = []
-    valid_files = []
+    validated_files = []
 
     for dirpath, _, filenames in os.walk(SRC):
         if dirpath.startswith(os.path.join(SRC, SKIPPED)):
             continue
+
         for file_name in filenames:
             if file_name == ".DS_Store":
                 continue
             file_path = os.path.join(dirpath, file_name)
 
-            if file_check(file_name):
-                valid_files.append((file_name, file_path))
-            else:
-                skipped_files.append(file_path)
+            if not file_check(file_name):
+                skipped_files.append((file_path, "Invalid filename or extension"))
+                continue
+
+            try:
+                metadata = get_metadata_tags(file_path)
+            except Exception as e:
+                skipped_files.append((file_path, "Metadata read error"))
+                continue
+
+            if not has_required_metadata(metadata):
+                skipped_files.append((file_path, "Missing required metadata"))
+                continue
+
+            category_dir, subdir_name = get_destination_subdir(file_name)
+            primary_directory = os.path.join(DST, "primary", category_dir, subdir_name)
+            derivative_directory = os.path.join(DST, "derivative", category_dir, subdir_name)
+            dst_file_path = os.path.join(primary_directory, file_name)
+
+            if os.path.exists(dst_file_path):
+                skipped_files.append((file_path, "File already exists at destination"))
+                continue
+
+            validated_files.append(
+                PlannedOperation(file_path, dst_file_path, file_name, derivative_directory)
+            )
 
     if skipped_files:
-        for file_path in skipped_files:
-            move_file(file_path, skipped_directory, "Moved to skipped")
+        logging.warning("Some files were skipped during validation.")
+        for file_path, reason in skipped_files:
+            move_file(file_path, skipped_directory, reason, dry_run=dry_run)
 
-    for file_name, file_path in valid_files:
-        # Check for required metadata before proceeding
-        metadata = get_metadata_tags(file_path)
-        if not has_required_metadata(metadata):
-            if not os.path.exists(skipped_directory):
-                os.makedirs(skipped_directory, exist_ok=True)
-            move_file(file_path, skipped_directory, "Missing required metadata")
-            continue
+        ### # Abort operation if any file was skipped
+        ### logging.warning("Aborting remaining operations due to validation failures.")
+        ### return
 
-        category_dir, subdir_name = get_destination_subdir(file_name)
+    # Execute all planned operations only if validation passed
+    for op in validated_files:
+        os.makedirs(os.path.dirname(op.dst_path), exist_ok=True)
+        os.makedirs(op.derivative_dir, exist_ok=True)
 
-        primary_directory = os.path.join(DST, "primary", category_dir, subdir_name)
-        derivative_directory = os.path.join(DST, "derivative", category_dir, subdir_name)
+        try:
+            move_file(op.src_path, op.dst_path, "Validated move", dry_run=dry_run)
+            if not dry_run:
+                create_jpg_derivative(op.dst_path, op.derivative_dir, op.file_name)
+        except Exception as e:
+            logging.error(f"Failed during operation for {op.file_name}: {e}")
+            # Optionally, add rollback logic here
 
-        dst_file_path = os.path.join(primary_directory, file_name)
-        os.makedirs(primary_directory, exist_ok=True)
-        os.makedirs(derivative_directory, exist_ok=True)
+    processed_count = len(validated_files)
+    skipped_count = len(skipped_files)
 
-        if os.path.exists(dst_file_path):
-            logging.warning(f"{file_name} already exists at destination, moving to skipped folder.")
-            if not skipped_files:
-                os.makedirs(skipped_directory, exist_ok=True)
-            move_file(file_path, skipped_directory, "Moved to skipped (file already exists at destination)")
-        else:
-            move_file(file_path, primary_directory, "Moved to primary destination")
-            full_dst_path = os.path.join(primary_directory, file_name)
-            create_jpg_derivative(full_dst_path, derivative_directory, file_name)
+    logging.info(f"Ingest Summary: {processed_count} processed, {skipped_count} skipped.")
+    print(f"Ingest Summary: {processed_count} processed, {skipped_count} skipped.")
 
-    if os.path.exists(skipped_directory) and not os.listdir(skipped_directory):
+    # Clean up skipped directory if unused
+    if not dry_run and os.path.exists(skipped_directory) and not os.listdir(skipped_directory):
         os.rmdir(skipped_directory)
 
-    delete_empty_dirs(SRC)
+    if not dry_run:
+        delete_empty_dirs(SRC)
+
 
 def main():
-    process_files()
+    process_files(dry_run=False)
     logging.info("Done")
 
 if __name__ == "__main__":
