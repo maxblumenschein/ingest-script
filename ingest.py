@@ -372,7 +372,8 @@ def convert_to_target_profile(img, file_name):
             profile_name = ImageCms.getProfileName(input_profile).strip()
             logging.info(f"{file_name}: Source ICC profile: {profile_name}")
 
-            converted = ImageCms.profileToProfile(img, input_profile, target_profile, outputMode=mode)
+            converted = ImageCms.profileToProfile(img, input_profile, target_profile, outputMode=mode, renderingIntent=0  # Perceptual intent
+            )
             converted.info['icc_profile'] = target_icc_bytes
         else:
             logging.info(f"{file_name}: No ICC profile embedded; assuming source is target and embedding target profile.")
@@ -407,7 +408,7 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name):
         os.makedirs(dst_directory, exist_ok=True)
         dst_jpg_path = os.path.join(dst_directory, os.path.splitext(file_name)[0] + ".jpg")
 
-        converted.save(dst_jpg_path, "JPEG", quality=98,
+        converted.save(dst_jpg_path, "JPEG", quality=100,
                        icc_profile=converted.info.get('icc_profile', b''))
         logging.info(f"{file_name}: Saved JPG derivative with embedded profile: {dst_jpg_path}")
 
