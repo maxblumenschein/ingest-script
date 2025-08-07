@@ -417,6 +417,20 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name):
     except Exception as e:
         logging.error(f"{file_name}: Failed to create JPG derivative: {e}")
 
+def can_create_jpg_derivative(src_image_path, file_name):
+    """
+    Test whether a JPG derivative can be successfully created from the image.
+    This is a dry-run version of create_jpg_derivative that doesn't write files.
+    """
+    try:
+        original = Image.open(src_image_path)
+        original = original.convert("RGB" if original.mode != 'L' else 'L')
+        _ = convert_to_target_profile(original.copy(), file_name)
+        return True
+    except Exception as e:
+        logging.error(f"{file_name}: Preflight check failed for JPG derivative: {e}")
+        return False
+
 def get_destination_subdir(file_name):
     base_file_name, _ = os.path.splitext(file_name)
     segments = base_file_name.split('_')
@@ -476,6 +490,10 @@ def process_files(dry_run=False):
 
             if os.path.exists(dst_file_path):
                 skipped_files.append((file_path, "File already exists at destination"))
+                continue
+
+            if not can_create_jpg_derivative(file_path, file_name):
+                skipped_files.append((file_path, "Cannot generate JPG derivative"))
                 continue
 
             validated_files.append(
