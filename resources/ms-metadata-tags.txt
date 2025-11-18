@@ -1,2 +1,3 @@
-DateTimeOriginal
 Creator
+FileModifyDate
+Source

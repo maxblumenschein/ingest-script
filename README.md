@@ -4,7 +4,7 @@ This Python script moves data from an input directoy to an output directory base
 
 ## Steps
 
-1. Check filenames for valid
+1. Check filenames for validity
     1. prefix
     2. segment length and syntax between delimeters
     3. id
@@ -13,7 +13,7 @@ This Python script moves data from an input directoy to an output directory base
     6. suffix
     7. extension
     8. required Metadata
-2. Move valid files into prefix-named folders inside output directory
+2. Move valid files into id-named folders inside output directory
 3. Create specified derivative (`.jpg`, `sRGB`) from valid primary files
 3. Move invalid files into skipped-files folder inside input directory
 
@@ -30,7 +30,7 @@ SRC = "path/to/source/directory" # define source directory
 DST = "path/to/destination/directory" # define destination directory
 ```
 
-The filecheck is made to check basic conformity of image files with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/). To adapt the filecheck configure the function `is_valid_filename(file_name)` inside `ìngest.py` accordingly.
+The filecheck is made to check basic conformity of image files with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/) and [_Wissenschaftliche Fotografie am Kunstmuseum Basel – Standards_](https://fotografie.kumu.swiss/). To adapt the filecheck configure the function `is_valid_filename(file_name)` inside `ìngest.py` accordingly.
 
 ### General dependencies
 

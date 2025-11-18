@@ -13,13 +13,15 @@ from variables import SRC, DST, SKIPPED, valid_id_initial_chars, valid_suffixes,
 
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff')
 
+Image.MAX_IMAGE_PIXELS = 500000000 # change max image size
+
 now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
 date_isoformat = now.replace(microsecond=0).isoformat()
 
 log_directory = os.path.join(DST, "__log__")
 os.makedirs(log_directory, exist_ok=True)
-log_file_name = f"script_{date_suffix}.log"
+log_file_name = f"ingest_{date_suffix}.log"
 log_path = os.path.join(log_directory, log_file_name)
 logging.basicConfig(filename=log_path, level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
@@ -531,6 +533,14 @@ def process_files(dry_run=False):
     # Clean up skipped directory if unused
     if not dry_run and os.path.exists(skipped_directory) and not os.listdir(skipped_directory):
         os.rmdir(skipped_directory)
+
+    # Copy log file into skipped folder if there are skipped files
+    if not dry_run and skipped_files:
+        try:
+            shutil.copy2(log_path, os.path.join(skipped_directory, log_file_name))
+            logging.info(f"Copied ingest log to skipped folder: {skipped_directory}")
+        except Exception as e:
+            logging.error(f"Failed to copy log file to skipped folder: {e}")
 
     if not dry_run:
         delete_empty_dirs(SRC)
