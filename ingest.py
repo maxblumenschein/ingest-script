@@ -9,7 +9,7 @@ import logging
 import subprocess
 import json
 
-from variables import SRC, DST, SKIPPED, valid_id_initial_chars, valid_suffixes, valid_first_segment_first_char, valid_first_segment_other_chars, required_metadata_tags
+from variables import SRC, DST, SKIPPED, SUBDIR_MODE, valid_id_initial_chars, valid_suffixes, valid_first_segment_first_char, valid_first_segment_other_chars, required_metadata_tags
 
 IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tif', '.tiff')
 
@@ -433,20 +433,34 @@ def can_create_jpg_derivative(src_image_path, file_name):
         logging.error(f"{file_name}: Preflight check failed for JPG derivative: {e}")
         return False
 
-def get_destination_subdir(file_name):
+def get_destination_subdir(file_name, mode="auto"):
     base_file_name, _ = os.path.splitext(file_name)
     segments = base_file_name.split('_')
 
-    # Default category and subdir
-    category_dir = "noIDs"
-    subdir_name = segments[0][1:4] if len(segments[0]) >= 4 else segments[0][1:]
+    first_segment = segments[0]
 
-    if len(segments) > 1 and is_valid_id_segment(segments[1]):
-        category_dir = "IDs"
-        first_id = segments[1].split('-')[0]  # Use only the first ID
-        subdir_name = first_id
+    # Default prefix: characters 2-4 (index 1 to 3)
+    prefix = first_segment[1:4] if len(first_segment) >= 4 else first_segment[1:]
 
-    return category_dir, subdir_name
+    has_id = len(segments) > 1 and is_valid_id_segment(segments[1])
+
+    if mode == "id":
+        if has_id:
+            first_id = segments[1].split('-')[0]
+            return "IDs", first_id
+        else:
+            return "noIDs", prefix
+
+    if mode == "prefix":
+        return "prefix", prefix
+
+    # auto mode (default behaviour)
+    if has_id:
+        first_id = segments[1].split('-')[0]
+        return "IDs", first_id
+
+    return "noIDs", prefix
+
 
 class PlannedOperation:
     def __init__(self, src_path, dst_path, file_name, derivative_dir):
@@ -485,7 +499,7 @@ def process_files(dry_run=False):
                 skipped_files.append((file_path, "Missing required metadata"))
                 continue
 
-            category_dir, subdir_name = get_destination_subdir(file_name)
+            category_dir, subdir_name = get_destination_subdir(file_name, SUBDIR_MODE)
             primary_directory = os.path.join(DST, "primary", category_dir, subdir_name)
             derivative_directory = os.path.join(DST, "derivative", category_dir, subdir_name)
             dst_file_path = os.path.join(primary_directory, file_name)
