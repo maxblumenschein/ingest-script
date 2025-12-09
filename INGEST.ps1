@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# PowerShell version of the Linux Bash venv script
+# Cross-platform PowerShell version of the Bash venv script
 # ---------------------------------------------------
 
 # --- Strict mode & UTF-8 output ---
@@ -21,14 +21,24 @@ if (-not (Test-Path $VenvDir)) {
 }
 
 # --- Activate virtual environment ---
-$ActivateScript = Join-Path $VenvDir "Scripts\Activate.ps1"
+if ($IsWindows) {
+    $ActivateScript = Join-Path $VenvDir "Scripts\Activate.ps1"
+} else {
+    $ActivateScript = Join-Path $VenvDir "bin/activate"
+}
+
 if (-not (Test-Path $ActivateScript)) {
-    Write-Host "Error: Cannot find Activate.ps1 in $VenvDir\Scripts" -ForegroundColor Red
+    Write-Host "Error: Cannot find activation script at $ActivateScript" -ForegroundColor Red
     exit 1
 }
 
-# Use & to execute the activation script in the current session
-. $ActivateScript
+# Activate virtual environment
+if ($IsWindows) {
+    . $ActivateScript
+} else {
+    # For Unix/macOS, source the activate script in the current session
+    bash -c "source '$ActivateScript'"
+}
 
 # --- Upgrade pip inside the venv ---
 Write-Host "Upgrading pip..."
@@ -49,6 +59,10 @@ Write-Host "Running ingest.py..."
 python $PythonScript
 
 # --- Deactivate virtual environment ---
-deactivate 2>$null
+if ($IsWindows) {
+    deactivate 2>$null
+} else {
+    bash -c "deactivate"
+}
 
 Write-Host "Execution completed."
