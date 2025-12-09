@@ -1,5 +1,6 @@
 import os
 script_dir = os.path.dirname(__file__)
+
 SRC = os.path.join(script_dir, 'test_source')
 DST = os.path.join(script_dir, 'test_destination')
 SKIPPED = 'skipped_files'
