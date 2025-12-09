@@ -1,36 +1,54 @@
 # Ingest
 
-This Python script moves data from an input directoy to an output directory based on filename and filetype.
+This Python script moves image data from an input directory to an output directory based on filename, filetype, and metadata conformity. It also generates derivative files in `.jpg` formatfor valid primary images.
+
+---
+
+## Functionality
+
+- Validates filenames according to _Mediastandard_ conventions.
+- Moves valid files into **ID-named folders** inside the output directory.
+- Generates a `.jpg` derivative for each valid primary file.
+- Moves invalid or non-conforming files into a `skipped-files` folder inside the input directory.
+- Logs all actions and decisions into a **log file** in the output and input directory.
+
+---
 
 ## Steps
 
-1. Check filenames for validity
-    1. prefix
-    2. segment length and syntax between delimeters
-    3. id
-    4. date
-    5. free-text
-    6. suffix
-    7. extension
-    8. required Metadata
-2. Move valid files into id-named folders inside output directory
-3. Create specified derivative (`.jpg`, `sRGB`) from valid primary files
-3. Move invalid files into skipped-files folder inside input directory
+1. **Check files for validity**
+    1. Prefix
+    2. Segment length and syntax between delimiters
+    3. ID
+    4. Date
+    5. Free-text
+    6. Suffix
+    7. Extension
+    8. Required metadata
+    9. ICC-profile
+
+2. **Move valid files** into ID-named folders inside the output directory.
+3. **Create derivative** files from valid primary images.
+4. **Move invalid files** into `skipped-files` folder inside input directory.
+
+---
 
 ## Logging
 
-Actions are recorded in a log-file inside the output directory
+- All actions, including file validation results and derivative creation, are recorded in a **log file** inside the output directory.
 
-## Use
+---
 
-Define input and output directory inside `variables.py`:
+## Usage
+
+Define input and output directories inside `variables.py`:
 
 ```python
-SRC = "path/to/source/directory" # define source directory
-DST = "path/to/destination/directory" # define destination directory
+SRC = "path/to/source/directory"  # define source directory
+DST = "path/to/destination/directory"  # define destination directory
 ```
 
-The filecheck is made to check basic conformity of image files with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/) and [_Wissenschaftliche Fotografie am Kunstmuseum Basel – Standards_](https://fotografie.kumu.swiss/). To adapt the filecheck configure the function `is_valid_filename(file_name)` inside `ìngest.py` accordingly.
+The filecheck is made to check basic conformity of image files with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/) and [_Wissenschaftliche Fotografie am Kunstmuseum Basel – Standards_](https://fotografie.kumu.swiss/).
 
 ### General dependencies
 
@@ -43,4 +61,4 @@ The filecheck is made to check basic conformity of image files with _Mediastanda
         1. Download and extract https://exiftool.org/
         2. Add to `PATH` manually
 
-[^1]: KMB-Mediastandard Version 3.0, 2024.
+[^1]: KMB-Mediastandard Version 3.0.1, 2025.

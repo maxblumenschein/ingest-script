@@ -26,7 +26,8 @@ pip install --upgrade pip
 pip install Pillow
 
 # Run the Python script inside the venv
-python3 "./ingest.py"
+python3 "./ingest.py" BLM #--dry-run #--skip-metadata #--metadata-only
+
 
 # Deactivate virtual environment after execution
 deactivate

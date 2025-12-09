@@ -1,0 +1,3 @@
+2025-12-09 15:59:59,063 [INFO] Starting ingest
+2025-12-09 15:59:59,063 [INFO] SRC=/Users/maxehrengruber/Fotoatelier/2_laufende_arbeiten/2024_scripts/ingest-script/test_source DST=/Users/maxehrengruber/Fotoatelier/2_laufende_arbeiten/2024_scripts/ingest-script/test_destination
+2025-12-09 15:59:59,064 [ERROR] Preset load/validation failed: Missing required metadata keys: Date Created

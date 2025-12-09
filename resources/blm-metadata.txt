@@ -1,0 +1,20 @@
+# ===== REQUIRED =====
+Creator="Max Blumenschein"
+Rights="Kunstmuseum Basel"
+Relation="Wissenschaftliche Fotografie am Kunstmuseum Basel – Standards (Version 1.1.0)"
+Date Created=" "
+
+# ===== RECOMMENDED =====
+Authors Position="Wissenschaftliche Fotografin"
+Address="St. Alban-Graben 8"
+City="Basel"
+Postal Code="4010"
+Country="Schweiz"
+Email Work="max.blumenschein@bs.ch"
+Telephone Work="+41 61 206 62 62"
+Website="kunstmuseumbasel.ch"
+
+# ===== OPTIONAL =====
+Title=""
+Description=""
+Instructions=""
