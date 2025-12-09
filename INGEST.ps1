@@ -7,6 +7,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# --- Detect platform ---
+$IsWindows = $env:OS -eq "Windows_NT"
+
 # --- Get the directory of the script ---
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $ScriptDir
@@ -23,30 +26,36 @@ if (-not (Test-Path $VenvDir)) {
 # --- Activate virtual environment ---
 if ($IsWindows) {
     $ActivateScript = Join-Path $VenvDir "Scripts\Activate.ps1"
-} else {
-    $ActivateScript = Join-Path $VenvDir "bin/activate"
-}
+    if (-not (Test-Path $ActivateScript)) {
+        Write-Host "Error: Cannot find activation script at $ActivateScript" -ForegroundColor Red
+        exit 1
+    }
 
-if (-not (Test-Path $ActivateScript)) {
-    Write-Host "Error: Cannot find activation script at $ActivateScript" -ForegroundColor Red
-    exit 1
-}
-
-# Activate virtual environment
-if ($IsWindows) {
+    # Dot-source to activate in current session
     . $ActivateScript
 } else {
-    # For Unix/macOS, source the activate script in the current session
-    bash -c "source '$ActivateScript'"
+    $ActivateScript = Join-Path $VenvDir "bin/activate"
+    if (-not (Test-Path $ActivateScript)) {
+        Write-Host "Error: Cannot find activation script at $ActivateScript" -ForegroundColor Red
+        exit 1
+    }
+
+    # For Unix/macOS: run the Python commands using the venv python directly
+    $PythonExe = Join-Path $VenvDir "bin/python"
+}
+
+# --- Determine which Python to use ---
+if ($IsWindows) {
+    $PythonExe = Join-Path $VenvDir "Scripts\python.exe"
 }
 
 # --- Upgrade pip inside the venv ---
 Write-Host "Upgrading pip..."
-python -m pip install --upgrade pip
+& $PythonExe -m pip install --upgrade pip
 
 # --- Install required Python packages ---
 Write-Host "Installing required packages..."
-python -m pip install Pillow
+& $PythonExe -m pip install Pillow
 
 # --- Run the Python script inside the venv ---
 $PythonScript = Join-Path $ScriptDir "ingest.py"
@@ -56,13 +65,7 @@ if (-not (Test-Path $PythonScript)) {
 }
 
 Write-Host "Running ingest.py..."
-python $PythonScript
-
-# --- Deactivate virtual environment ---
-if ($IsWindows) {
-    deactivate 2>$null
-} else {
-    bash -c "deactivate"
-}
+# Pass any arguments after the script
+& $PythonExe $PythonScript "SCJ"
 
 Write-Host "Execution completed."
