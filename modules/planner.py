@@ -10,7 +10,17 @@ from modules.filechecks import (
 from modules.imageops import can_create_jpg_derivative
 
 
-def build_plan(src_root, dst_root, subdir_mode, logger, metadata_required=True):
+def build_plan(src_root, dst_root, subdir_mode, logger):
+    """
+    Walk the source directory and build an ingest plan.
+    Files are validated for:
+      - image type
+      - filename structure
+      - required metadata
+      - ICC profile
+      - derivative creation possibility
+    Returns a tuple: (planned_files_list, skipped_files_list)
+    """
     planned = []
     skipped = []
 
@@ -25,7 +35,7 @@ def build_plan(src_root, dst_root, subdir_mode, logger, metadata_required=True):
     for dirpath, dirnames, filenames in os.walk(src_root):
 
         # ---------------------------------------------------------
-        # SKIP meta directories
+        # Skip skipped directories and log folder
         # ---------------------------------------------------------
         dirnames[:] = [
             d for d in dirnames
@@ -33,7 +43,7 @@ def build_plan(src_root, dst_root, subdir_mode, logger, metadata_required=True):
         ]
 
         # ---------------------------------------------------------
-        # Filter out log files (they should be ignored entirely)
+        # Ignore log files and system files
         # ---------------------------------------------------------
         filenames = [
             f for f in filenames
@@ -60,7 +70,6 @@ def build_plan(src_root, dst_root, subdir_mode, logger, metadata_required=True):
                 valid_id_initial_chars,
                 valid_suffixes
             )
-
             if not valid:
                 skipped.append((fpath, 'invalid filename'))
                 continue
@@ -74,20 +83,20 @@ def build_plan(src_root, dst_root, subdir_mode, logger, metadata_required=True):
                 skipped.append((fpath, 'metadata read error'))
                 continue
 
-            if metadata_required:
-                if not has_required_metadata(metadata, fname, required_metadata_tags):
-                    skipped.append((fpath, 'missing required metadata'))
-                    continue
+            if not has_required_metadata(metadata, fname, required_metadata_tags):
+                skipped.append((fpath, 'missing required metadata'))
+                continue
 
+            # ---------------------------------------------------------
             # ICC profile check
+            # ---------------------------------------------------------
             icc_ok, icc_reason = is_valid_icc_profile(metadata)
             if not icc_ok:
                 skipped.append((fpath, icc_reason))
                 continue
 
-
             # ---------------------------------------------------------
-            # Destination path
+            # Determine destination path
             # ---------------------------------------------------------
             category_dir, subdir_name = get_destination_subdir(fname, subdir_mode)
             primary_directory = os.path.join(dst_root, 'primary', category_dir, subdir_name)
@@ -106,7 +115,7 @@ def build_plan(src_root, dst_root, subdir_mode, logger, metadata_required=True):
                 continue
 
             # ---------------------------------------------------------
-            # Finally add this to the ingest plan
+            # Add to ingest plan
             # ---------------------------------------------------------
             planned.append({
                 'src': fpath,

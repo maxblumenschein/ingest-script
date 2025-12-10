@@ -50,7 +50,7 @@ def build_exiftool_args_from_preset(preset):
         "Creator": "XMP-dc:Creator",
         "Rights": "XMP-dc:Rights",
         "Relation": "XMP-dc:Relation",
-        "Date Created": "XMP-xmp:CreateDate",
+        "CreateDate": "XMP-xmp:CreateDate",
         "Authors Position": "XMP-photoshop:AuthorsPosition",
         "Address": "XMP-iptcCore:CreatorAddress",
         "City": "XMP-iptcCore:CreatorCity",
