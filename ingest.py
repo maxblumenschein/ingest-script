@@ -19,7 +19,7 @@ from modules.metadata import load_preset_for_code, MetadataPresetError
 from modules.planner import build_plan
 from modules.fileops import move_file
 from modules.exifwriter import has_exiftool, write_metadata_to_file
-from modules.filechecks import delete_empty_dirs, is_image_file
+from modules.filechecks import delete_empty_dirs, is_image_file, get_metadata_tags, has_required_metadata
 from modules.imageops import create_jpg_derivative
 
 # === Logging setup ===
@@ -95,61 +95,87 @@ def main():
         sys.exit(2)
 
     # === TRUE METADATA-ONLY MODE ===
+    mode_metadata_only = False
+
     if args.metadata_only:
         if not exif_args:
             logger.error("metadata-only requested but no preset loaded")
             sys.exit(2)
 
         run_metadata_only(exif_args, dry_run=args.dry_run)
-        return
+        mode_metadata_only = True
 
     # === Normal ingest mode ===
-    metadata_required = True
-    plan, skipped = build_plan(SRC, DST, SUBDIR_MODE, logger)
+    if not mode_metadata_only:
+        metadata_required = True
 
-    # Move skipped files
-    if skipped:
+        # Always create the skipped directory
         skipped_dir = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
         os.makedirs(skipped_dir, exist_ok=True)
-        for path, reason in skipped:
-            move_file(path, skipped_dir, reason, dry_run=args.dry_run, logger=logger)
 
-    logger.info("Planned operations: %d", len(plan))
+        plan, skipped = build_plan(SRC, DST, SUBDIR_MODE, logger)
 
-    # === Execute planned ingest ===
-    for item in plan:
-        os.makedirs(os.path.dirname(item['dst']), exist_ok=True)
-        os.makedirs(item['derivative_dir'], exist_ok=True)
+        # Move skipped files
+        if skipped:
+            for path, reason in skipped:
+                move_file(path, skipped_dir, reason, dry_run=args.dry_run, logger=logger)
 
-        try:
-            # Move file
-            move_file(item['src'], item['dst'], 'validated move',
-                      dry_run=args.dry_run, logger=logger)
+        logger.info("Planned operations: %d", len(plan))
 
-            # Write metadata if available and not skipping
-            if exif_args and not args.skip_metadata:
-                if not has_exiftool():
-                    logger.error("exiftool not found; skipping metadata write")
-                else:
-                    write_metadata_to_file(item['dst'], exif_args, dry_run=args.dry_run, logger=logger)
+        # === Execute planned ingest ===
+        for item in plan:
 
+            # --- 1. PRE-VALIDATE METADATA WHEN --skip-metadata ---
+            if args.skip_metadata:
+                final_metadata = get_metadata_tags(item['src'])
+                if not has_required_metadata(final_metadata, item['fname'], required_metadata_tags):
+                    logger.error("Missing required metadata before processing (skip-metadata): %s", item['fname'])
 
-            # Create derivative
-            if not args.dry_run:
-                create_jpg_derivative(item['dst'], item['derivative_dir'], item['fname'], logger=logger)
+                    if not args.dry_run:
+                        move_file(item['src'], skipped_dir, 'missing required metadata', dry_run=args.dry_run, logger=logger)
 
-        except Exception as e:
-            logger.error("Operation failed for %s: %s", item['fname'], e)
+                    continue
 
-    # Cleanup skipped dir if empty
-    skipped_dir = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
-    if os.path.exists(skipped_dir) and not os.listdir(skipped_dir):
-        try:
-            os.rmdir(skipped_dir)
-        except OSError:
-            pass
+            # Create destination dirs
+            os.makedirs(os.path.dirname(item['dst']), exist_ok=True)
+            os.makedirs(item['derivative_dir'], exist_ok=True)
 
-    # Copy log to SRC/__log__
+            try:
+                # --- 3. MOVE ---
+                move_file(item['src'], item['dst'], 'validated move', dry_run=args.dry_run, logger=logger)
+                target_path = item['dst']
+
+                # --- 4. WRITE METADATA ---
+                if exif_args and not args.skip_metadata:
+                    if has_exiftool():
+                        write_metadata_to_file(target_path, exif_args, dry_run=args.dry_run, logger=logger)
+                    else:
+                        logger.error("exiftool missing — cannot write metadata")
+
+                # --- 5. POST-METADATA VALIDATION ---
+                if not args.skip_metadata:
+                    final_metadata = get_metadata_tags(target_path)
+                    if not has_required_metadata(final_metadata, item['fname'], required_metadata_tags):
+                        logger.error("Missing required metadata after write: %s", item['fname'])
+                        if not args.dry_run:
+                            move_file(target_path, skipped_dir, 'missing required metadata', dry_run=args.dry_run, logger=logger)
+                        continue
+
+                # --- 6. Derivative ---
+                if not args.dry_run:
+                    create_jpg_derivative(target_path, item['derivative_dir'], item['fname'], logger=logger)
+
+            except Exception as e:
+                logger.error("Operation failed for %s: %s", item['fname'], e)
+
+        # Cleanup skipped dir if empty
+        if os.path.exists(skipped_dir) and not os.listdir(skipped_dir):
+            try:
+                os.rmdir(skipped_dir)
+            except OSError:
+                pass
+
+    # === Always copy log to SRC ===
     try:
         inlog = os.path.join(SRC, '__log__')
         os.makedirs(inlog, exist_ok=True)
@@ -160,6 +186,7 @@ def main():
 
     delete_empty_dirs(SRC, logger)
     logger.info("Ingest done")
+
 
 
 if __name__ == '__main__':
