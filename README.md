@@ -1,16 +1,18 @@
 # Ingest
 
-This Python script moves image data from an input directory to an output directory based on filename, filetype, and metadata conformity. It also generates derivative files in `.jpg` formatfor valid primary images.
+This Python script moves image data from an input directory to an output directory based on filename, filetype, and metadata conformity. It generates derivative files in `.jpg` format for valid primary images.
 
 ---
 
 ## Functionality
 
-- Validates filenames according to _Mediastandard_ conventions.
-- Moves valid files into **ID-named folders** inside the output directory.
+- Validates filenames according to _Mediastandard_[^1] conventions.
+- Moves valid files into **prefix-named folders**[^2] inside the output directory.
+- Writes personal metadata to validated files.
 - Generates a `.jpg` derivative for each valid primary file.
 - Moves invalid or non-conforming files into a `skipped-files` folder inside the input directory.
 - Logs all actions and decisions into a **log file** in the output and input directory.
+- Options via arguments for only writing metadata (`--only-metadata`) or only validating and moving files (`--skip-metadata`).
 
 ---
 
@@ -62,3 +64,5 @@ The filecheck is made to check basic conformity of image files with _Mediastanda
         2. Add to `PATH` manually
 
 [^1]: KMB-Mediastandard Version 3.0.1, 2025.
+
+[^2]: ID-named option available via `variables.py`.
