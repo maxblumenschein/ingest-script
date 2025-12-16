@@ -1,6 +1,6 @@
 # Ingest
 
-This Python script moves image data from an input directory to an output directory based on filename, filetype, and metadata conformity. It generates derivative files in `.jpg` format for valid primary images.
+This Python script moves image data from an input directory to an output directory. Files are validated before movement based on filename, filetype and color profile conformity. Validated files are moved and personal metadata is written to them. The script generates derivative files in `.jpg` format for valid primary images. Invalid files are skipped.
 
 ---
 
@@ -9,48 +9,47 @@ This Python script moves image data from an input directory to an output directo
 - Validates filenames according to _Mediastandard_[^1] conventions.
 - Moves valid files into **prefix-named folders**[^2] inside the output directory.
 - Writes personal metadata to validated files.
-- Generates a `.jpg` derivative for each valid primary file.
+- Generates a `.jpg` derivative for valid primary file.
 - Moves invalid or non-conforming files into a `skipped-files` folder inside the input directory.
-- Logs all actions and decisions into a **log file** in the output and input directory.
-- Options via arguments for only writing metadata (`--only-metadata`) or only validating and moving files (`--skip-metadata`).
+- Logs all actions into a **log file** in the output and input directory.
+- Options via arguments for only writing metadata (`--only-metadata`), only validating and moving files (`--skip-metadata`) or dryrunning (`--dry-run`).
+
+The filecheck is made to check basic conformity of image files with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/) and [_Wissenschaftliche Fotografie am Kunstmuseum Basel – Standards_](https://fotografie.kumu.swiss/).
 
 ---
 
 ## Steps
 
 1. **Check files for validity**
-    1. Prefix
-    2. Segment length and syntax between delimiters
-    3. ID
-    4. Date
-    5. Free-text
-    6. Suffix
-    7. Extension
-    8. Required metadata
-    9. ICC-profile
+    1. Extension: is supported file type
+    2. Filename
+        3. FIRST: 4 characters, validated against allowed character sets
+        4. ID (optional): numeric or alphanumeric IDs, possibly hyphen-separated
+        5. DATE: must be YYYY-MM-DD
+        6. FREETEXT (optional): lowercase alphanumerics and hyphens
+        7. SUFFIX (optional): must start with s- and match allowed suffix tokens
+    3. ICC-profile
+    4. Required metadata
 
-2. **Move valid files** into ID-named folders inside the output directory.
-3. **Create derivative** files from valid primary images.
-4. **Move invalid files** into `skipped-files` folder inside input directory.
-
----
-
-## Logging
-
-- All actions, including file validation results and derivative creation, are recorded in a **log file** inside the output directory.
+2. **Move valid files** into prefix-named folders inside the output directory.
+3. **Write personal metadata** to validated primary files. 
+4. **Create derivative** files from valid primary files.
+5. **Move invalid files** into `skipped-files` folder inside input directory.
 
 ---
 
 ## Usage
 
-Define input and output directories inside `variables.py`:
+1. Define input and output directories inside `variables.py`:
 
 ```python
 SRC = "path/to/source/directory"  # define source directory
 DST = "path/to/destination/directory"  # define destination directory
 ```
 
-The filecheck is made to check basic conformity of image files with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/) and [_Wissenschaftliche Fotografie am Kunstmuseum Basel – Standards_](https://fotografie.kumu.swiss/).
+2. Define personal metadata inside `resources/abc-metadata.txt`, where `abc` becomes the argument for this specific personal metadata file.
+
+3. run `python3 "./ingest.py" ABC`
 
 ### General dependencies
 
