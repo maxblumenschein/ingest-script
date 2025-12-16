@@ -23,11 +23,11 @@ The filecheck is made to check basic conformity of image files with _Mediastanda
 1. **Check files for validity**
     1. Extension: is supported file type
     2. Filename
-        3. FIRST: 4 characters, validated against allowed character sets
-        4. ID (optional): numeric or alphanumeric IDs, possibly hyphen-separated
-        5. DATE: must be YYYY-MM-DD
-        6. FREETEXT (optional): lowercase alphanumerics and hyphens
-        7. SUFFIX (optional): must start with s- and match allowed suffix tokens
+        * FIRST: 4 characters, validated against allowed character sets
+        * ID (optional): numeric or alphanumeric IDs, possibly hyphen-separated
+        * DATE: must be `YYYY-MM-DD`
+        * FREETEXT (optional): lowercase alphanumerics and hyphens
+        * SUFFIX (optional): must start with `s-` and match allowed suffix tokens
     3. ICC-profile
     4. Required metadata
 
