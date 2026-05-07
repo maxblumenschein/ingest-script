@@ -26,16 +26,23 @@ from modules.imageops import create_jpg_derivative
 from modules.logging_utils import setup_logging
 from modules.metadata import MetadataPresetError, load_preset_for_code
 from modules.planner import build_plan
-from variables import DST, SKIPPED, SRC, SUBDIR_MODE, required_metadata_tags
+from variables import DST, SKIPPED, SRC, STAGING_DIR, SUBDIR_MODE, required_metadata_tags
+
+# When a staging dir is configured, all processing happens there; the result is
+# bulk-copied to DST at the end. Use DST directly if no staging is set.
+effective_dst = STAGING_DIR if STAGING_DIR else DST
 
 # === Logging ===
 now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
-log_dir = os.path.join(DST, "__log__")
+log_dir = os.path.join(effective_dst, "__log__")
 os.makedirs(log_dir, exist_ok=True)
 log_file = os.path.join(log_dir, f"ingest_{date_suffix}.log")
 logger = setup_logging(log_file)
-logger.info("Starting ingest  SRC=%s  DST=%s", SRC, DST)
+if STAGING_DIR:
+    logger.info("Starting ingest  SRC=%s  DST=%s  staging=%s", SRC, DST, STAGING_DIR)
+else:
+    logger.info("Starting ingest  SRC=%s  DST=%s", SRC, DST)
 
 
 # === Terminal UI helpers ===
@@ -57,6 +64,34 @@ def _finish():
         logger.exception("Failed to copy log")
     delete_empty_dirs(SRC, logger)
     logger.info("Ingest done")
+
+
+def _copy_staging_to_dst():
+    print(f'\nCopying to destination …')
+    logger.info("Bulk copy  staging=%s  DST=%s", STAGING_DIR, DST)
+    for handler in logger.handlers:
+        handler.flush()
+    try:
+        all_files = [
+            os.path.join(dp, f)
+            for dp, _, files in os.walk(STAGING_DIR)
+            for f in files
+        ]
+        total = len(all_files)
+        os.makedirs(DST, exist_ok=True)
+        for i, src_file in enumerate(all_files, 1):
+            rel = os.path.relpath(src_file, STAGING_DIR)
+            dst_file = os.path.join(DST, rel)
+            _progress(i, total, os.path.basename(src_file))
+            os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+        print()
+        shutil.rmtree(STAGING_DIR)
+        logger.info("Staging copy complete")
+    except Exception as e:
+        logger.error("Staging copy failed: %s", e)
+        print(f'\n  ! Copy to destination failed: {e}')
+        print(f'    Files are safe in staging dir: {STAGING_DIR}')
 
 
 # === Metadata-only mode ===
@@ -114,6 +149,8 @@ def main():
             sys.exit(2)
         run_metadata_only(exif_args, dry_run=args.dry_run)
         _finish()
+        if STAGING_DIR and not args.dry_run:
+            _copy_staging_to_dst()
         return
 
     # === Normal ingest ===
@@ -124,9 +161,11 @@ def main():
     # --- Scan ---
     print(f'\nScanning {src_name} …')
     skipped_dir = os.path.join(SRC, f"{SKIPPED}_{date_suffix}")
+    if STAGING_DIR:
+        print(f'  staging: {STAGING_DIR}')
     os.makedirs(skipped_dir, exist_ok=True)
 
-    plan, skipped = build_plan(SRC, DST, SUBDIR_MODE, logger)
+    plan, skipped = build_plan(SRC, effective_dst, SUBDIR_MODE, logger, real_dst=DST)
     logger.info("Plan: %d files, %d skipped", len(plan), len(skipped))
 
     for path, reason in skipped:
@@ -229,6 +268,8 @@ def main():
             pass
 
     _finish()
+    if STAGING_DIR and not args.dry_run:
+        _copy_staging_to_dst()
 
 
 if __name__ == "__main__":
