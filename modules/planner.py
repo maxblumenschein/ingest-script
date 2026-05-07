@@ -4,7 +4,8 @@ from modules.filechecks import (
     is_image_file,
     is_valid_filename,
     get_metadata_tags,
-    is_valid_icc_profile
+    is_valid_icc_profile,
+    find_plausible_date,
 )
 from modules.imageops import can_create_jpg_derivative
 
@@ -75,6 +76,12 @@ def build_plan(src_root, dst_root, subdir_mode, logger):
             icc_ok, icc_reason = is_valid_icc_profile(metadata)
             if not icc_ok:
                 skipped.append((fpath, icc_reason))
+                continue
+
+            # Date check
+            _, date_val = find_plausible_date(metadata)
+            if date_val is None:
+                skipped.append((fpath, "no plausible creation date"))
                 continue
 
             # Destination path

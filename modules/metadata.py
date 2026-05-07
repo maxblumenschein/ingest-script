@@ -23,7 +23,7 @@ def parse_preset_file(path):
             rhs = rhs.strip()
             # Remove quotes if present
             if (rhs.startswith('"') and rhs.endswith('"')) or (rhs.startswith("'") and rhs.endswith("'")):
-                value = rhs[1:-1]
+                value = rhs[1:-1].strip()
             else:
                 logging.warning('Unquoted preset value; accepting raw: %s', line)
                 value = rhs

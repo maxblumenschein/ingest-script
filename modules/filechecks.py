@@ -105,6 +105,31 @@ def is_valid_filename(file_name, valid_first_segment_first_char, valid_first_seg
         return False, True
     return True, False
 
+_DATE_FALLBACK_TAGS = ['DateTimeOriginal', 'CreateDate', 'DateCreated', 'ModifyDate']
+
+
+def find_plausible_date(metadata):
+    """Return (tag, value) for the first plausible date found, or (None, None)."""
+    for tag in _DATE_FALLBACK_TAGS:
+        val = metadata.get(tag)
+        if val and str(val).strip():
+            return tag, str(val).strip()
+    return None, None
+
+
+_DATE_FALLBACK_TAGS = ['DateTimeOriginal', 'CreateDate', 'ModifyDate']
+
+
+def find_plausible_date(metadata):
+    """Return (tag, value) for the first plausible image date, or (None, None).
+    Only considers EXIF/XMP image dates — not ICC profile or filesystem dates."""
+    for tag in _DATE_FALLBACK_TAGS:
+        val = metadata.get(tag)
+        if val and str(val).strip():
+            return tag, str(val).strip()
+    return None, None
+
+
 def is_valid_icc_profile(metadata):
     """
     Valid RGB:  eciRGB v2 ICCv4, eciRGB v2

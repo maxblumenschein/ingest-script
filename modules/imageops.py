@@ -30,12 +30,37 @@ def convert_to_target_profile(img, file_name):
         raise
 
 
+def _is_grayscale(mode):
+    return mode.split(';')[0] in ('L', 'LA', 'I', 'F')
+
+
+def _to_8bit(img):
+    """Convert any image to 8-bit mode (L for grayscale, RGB for colour).
+    For high-bit-depth grayscale (I;16, I, F) scales values to 0-255 rather than clipping."""
+    icc = img.info.get('icc_profile')
+    if _is_grayscale(img.mode):
+        base = img.mode.split(';')[0]
+        if base == 'I':
+            # 16-bit unsigned (0-65535) → scale to 8-bit; point() uses linear transform
+            out = img.point(lambda x: x / 256, 'L').convert('L')
+        elif base == 'F':
+            # Float (0.0-1.0) → scale to 8-bit
+            out = img.point(lambda x: x * 255, 'L').convert('L')
+        else:
+            out = img.convert('L')
+    else:
+        out = img.convert('RGB')
+    if icc and not out.info.get('icc_profile'):
+        out.info['icc_profile'] = icc
+    return out
+
+
 def create_jpg_derivative(src_image_path, dst_directory, file_name, logger=None):
     if logger is None:
         logger = logging.getLogger('ingest')
     try:
         original = Image.open(src_image_path)
-        original = original.convert('RGB' if original.mode != 'L' else 'L')
+        original = _to_8bit(original)
         converted = convert_to_target_profile(original.copy(), file_name)
         os.makedirs(dst_directory, exist_ok=True)
         dst_jpg = os.path.join(dst_directory, os.path.splitext(file_name)[0] + '.jpg')
@@ -51,7 +76,7 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name, logger=None)
 def can_create_jpg_derivative(src_image_path, file_name):
     try:
         original = Image.open(src_image_path)
-        original = original.convert('RGB' if original.mode != 'L' else 'L')
+        original = _to_8bit(original)
         _ = convert_to_target_profile(original.copy(), file_name)
         return True
     except Exception:
