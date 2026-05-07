@@ -19,7 +19,7 @@ from PIL import Image
 warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
 Image.MAX_IMAGE_PIXELS = 405_000_000
 
-from modules.exifwriter import ensure_xmp_create_date, has_exiftool, write_metadata_to_file
+from modules.exifwriter import has_exiftool, write_metadata_to_file
 from modules.filechecks import delete_empty_dirs, get_metadata_tags, has_required_metadata, is_image_file
 from modules.fileops import move_file
 from modules.imageops import create_jpg_derivative
@@ -152,15 +152,9 @@ def main():
         _progress(i, total, item['fname'])
         _ok = True
 
-        # 1. Pre-validate for --skip-metadata
+        # 1. Pre-validate for --skip-metadata (use metadata cached during planning)
         if args.skip_metadata:
-            try:
-                meta = get_metadata_tags(item['src'])
-            except Exception as e:
-                logger.error("Cannot read metadata for %s: %s", item['fname'], e)
-                err_list.append((item['fname'], 'metadata read error'))
-                continue
-            if not has_required_metadata(meta, item['fname'], required_metadata_tags):
+            if not has_required_metadata(item['metadata'], item['fname'], required_metadata_tags):
                 logger.error("Missing required metadata: %s", item['fname'])
                 err_list.append((item['fname'], 'missing required metadata'))
                 if not args.dry_run:
@@ -177,18 +171,22 @@ def main():
                       dry_run=args.dry_run, logger=logger)
             target_path = item['dst']
 
-            # 4. Write metadata
-            if exif_args and not args.skip_metadata:
-                if has_exiftool():
-                    write_metadata_to_file(target_path, exif_args,
-                                           dry_run=args.dry_run, logger=logger)
+            # 4. Write metadata + XMP:CreateDate in one exiftool call
+            xmp_date = item.get('xmp_create_date')
+            if has_exiftool():
+                if exif_args and not args.skip_metadata:
+                    write_args = list(exif_args)
+                    if xmp_date:
+                        write_args.append(f'-XMP-xmp:CreateDate={xmp_date}')
+                elif xmp_date:
+                    write_args = ['-overwrite_original', f'-XMP-xmp:CreateDate={xmp_date}']
                 else:
-                    logger.error("exiftool missing — cannot write metadata")
-
-            # 4b. Ensure XMP-xmp:CreateDate
-            # In dry-run the file hasn't moved yet, so check the source path
-            date_check_path = item['src'] if args.dry_run else target_path
-            ensure_xmp_create_date(date_check_path, dry_run=args.dry_run, logger=logger)
+                    write_args = None
+                if write_args:
+                    write_metadata_to_file(target_path, write_args,
+                                           dry_run=args.dry_run, logger=logger)
+            elif exif_args and not args.skip_metadata:
+                logger.error("exiftool missing — cannot write metadata")
 
             # 5. Post-metadata validation (skip in dry-run — file not actually at destination)
             if not args.skip_metadata and not args.dry_run:

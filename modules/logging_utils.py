@@ -10,13 +10,13 @@ def setup_logging(log_path):
     file_fmt = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 
     fh = logging.FileHandler(log_path, encoding='utf-8')
-    fh.setLevel(logging.DEBUG)
+    fh.setLevel(logging.INFO)
     fh.setFormatter(file_fmt)
     logger.addHandler(fh)
 
     # Route root-logger calls (from modules using logging.xyz directly) to file only
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
+    root.setLevel(logging.INFO)
     root.addHandler(fh)
 
     return logger

@@ -1,4 +1,5 @@
 import os
+from modules.exifwriter import normalize_date_to_iso8601
 from modules.filechecks import (
     get_destination_subdir,
     is_image_file,
@@ -83,6 +84,7 @@ def build_plan(src_root, dst_root, subdir_mode, logger):
             if date_val is None:
                 skipped.append((fpath, "no plausible creation date"))
                 continue
+            xmp_create_date = normalize_date_to_iso8601(date_val)
 
             # Destination path
             category_dir, subdir_name = get_destination_subdir(fname, subdir_mode)
@@ -106,6 +108,8 @@ def build_plan(src_root, dst_root, subdir_mode, logger):
                     "dst": dst_file,
                     "fname": fname,
                     "derivative_dir": derivative_directory,
+                    "metadata": metadata,
+                    "xmp_create_date": xmp_create_date,
                 }
             )
 

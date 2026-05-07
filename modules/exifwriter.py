@@ -5,7 +5,7 @@ import re
 import shutil
 import subprocess
 
-def _normalize_date_to_iso8601(date_str):
+def normalize_date_to_iso8601(date_str):
     """Convert EXIF-style date (YYYY:MM:DD HH:MM:SS[±HH:MM]) to ISO 8601."""
     m = re.match(r'(\d{4})[:\-](\d{2})[:\-](\d{2})[T ](\d{2}):(\d{2}):(\d{2})([\+\-]\d{2}:\d{2}|Z)?', date_str.strip())
     if not m:
@@ -34,16 +34,14 @@ def write_metadata_to_file(target_path, metadata_args, dry_run=False, logger=Non
         return False
 
     cmd = ['exiftool'] + metadata_args + [target_path]
-    logger.info('Running exiftool: %s', ' '.join(cmd))
+    logger.debug('exiftool: %s', ' '.join(cmd))
 
     if dry_run:
-        logger.info('[DRY-RUN] exiftool call skipped')
+        logger.debug('[DRY-RUN] exiftool call skipped')
         return True
 
     try:
         proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
-        if proc.stdout:
-            logger.info('exiftool stdout: %s', proc.stdout.strip())
         if proc.stderr:
             logger.warning('exiftool stderr: %s', proc.stderr.strip())
         return True
@@ -89,12 +87,12 @@ def ensure_xmp_create_date(file_path, dry_run=False, logger=None):
         logger.error('%s: no plausible creation date found', fname)
         return False
 
-    iso_val = _normalize_date_to_iso8601(raw_val)
+    iso_val = normalize_date_to_iso8601(raw_val)
     if not iso_val:
         logger.error('%s: could not parse date %r from %s', fname, raw_val, src_tag)
         return False
 
-    logger.info('%s: writing XMP-xmp:CreateDate from %s: %s', fname, src_tag, iso_val)
+    logger.info('%s: setting XMP-xmp:CreateDate from %s: %s', fname, src_tag, iso_val)
 
     if dry_run:
         logger.info('[DRY-RUN] would write XMP-xmp:CreateDate=%s', iso_val)

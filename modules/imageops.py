@@ -74,10 +74,11 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name, logger=None)
 
 
 def can_create_jpg_derivative(src_image_path, file_name):
+    # Light check: just parse the image header. ICC validity is already verified
+    # by is_valid_icc_profile() before this is called.
     try:
-        original = Image.open(src_image_path)
-        original = _to_8bit(original)
-        _ = convert_to_target_profile(original.copy(), file_name)
+        with Image.open(src_image_path) as img:
+            _ = img.size
         return True
     except Exception:
         return False
