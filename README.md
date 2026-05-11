@@ -1,67 +1,111 @@
 # Ingest
 
-This Python script moves image data from an input directory to an output directory. Files are validated before movement based on filename, filetype and color profile conformity. Validated files are moved and personal metadata is written to them. The script generates derivative files in `.jpg` format for valid primary images. Invalid files are skipped.
+Moves image files from a source directory to a destination directory. Files are validated against _Mediastandard_[^1] conventions before processing. Valid files are moved, tagged with personal metadata, and a `.jpg` derivative is generated. Invalid files are collected in a `skipped_files` folder.
 
 ---
 
-## Functionality
+## First-time setup
 
-- Validates filenames according to _Mediastandard_[^1] conventions.
-- Moves valid files into **prefix-named folders**[^2] inside the output directory.
-- Writes personal metadata to validated files.
-- Generates a `.jpg` derivative for valid primary file.
-- Moves invalid or non-conforming files into a `skipped-files` folder inside the input directory.
-- Logs all actions into a **log file** in the output and input directory.
-- Options via arguments for only writing metadata (`--only-metadata`), only validating and moving files (`--skip-metadata`) or dryrunning (`--dry-run`).
+Run once on a new machine:
 
-The filecheck is made to check basic conformity of image files with _Mediastandard_ [^1] at [Kunstmuseum Basel](https://medienstandard.kumu.swiss/) and [_Wissenschaftliche Fotografie am Kunstmuseum Basel – Standards_](https://fotografie.kumu.swiss/).
-
----
-
-## Steps
-
-1. **Check files for validity**
-    1. Extension: is supported file type
-    2. Filename
-        * FIRST: 4 characters, validated against allowed character sets
-        * ID (optional): numeric or alphanumeric IDs, possibly hyphen-separated
-        * DATE: must be `YYYY-MM-DD`
-        * FREETEXT (optional): lowercase alphanumerics and hyphens
-        * SUFFIX (optional): must start with `s-` and match allowed suffix tokens
-    3. ICC-profile
-    4. Required metadata
-
-2. **Move valid files** into prefix-named folders inside the output directory.
-3. **Write personal metadata** to validated primary files. 
-4. **Create derivative** files from valid primary files.
-5. **Move invalid files** into `skipped-files` folder inside input directory.
-
----
-
-## Usage
-
-1. Define input and output directories inside `variables.py`:
-
-```python
-SRC = "path/to/source/directory"  # define source directory
-DST = "path/to/destination/directory"  # define destination directory
+```
+python3 onboard.py        # macOS / Linux
+python  onboard.py        # Windows
 ```
 
-2. Define personal metadata inside `resources/abc-metadata.txt`, where `abc` becomes the argument for this specific personal metadata file.
+The wizard will:
 
-3. run `python3 "./ingest.py" ABC`
+1. Create a virtual environment and install Python dependencies
+2. Check for ExifTool and provide install instructions if missing
+3. Create your personal metadata preset in `presets/`
+4. Create `user_config.py` with your source and destination paths
 
-### General dependencies
+After setup, everything is ready to use via the launcher scripts.
 
-1. Install Pillow: `pip install pillow`
+### ExifTool
 
-2. Install exiftool:
-    * **macOS**: `brew install exiftool`
-    * **Ubuntu/Debian**: `sudo apt install libimage-exiftool-perl`
-    * **Windows**:
-        1. Download and extract https://exiftool.org/
-        2. Add to `PATH` manually
+ExifTool is required and must be installed separately.
 
-[^1]: KMB-Mediastandard Version 3.0.1, 2025.
+- **macOS**: `brew install exiftool`
+- **Ubuntu / Debian**: `sudo apt install libimage-exiftool-perl`
+- **Windows (no admin)**: download the standalone `exiftool.exe` from [exiftool.org](https://exiftool.org), rename it to `exiftool.exe`, and place it in a `bin/` folder inside this project. The script will find it automatically.
 
-[^2]: ID-named option available via `variables.py`.
+### Python
+
+Python 3.9 or newer is required.
+
+- **macOS**: pre-installed, or via [Homebrew](https://brew.sh)
+- **Windows**: available from the Microsoft Store (no admin rights needed)
+
+---
+
+## Daily use
+
+```
+./INGEST          # macOS / Linux
+./INGEST.ps1      # Windows (PowerShell)
+```
+
+The launcher reads your author code and paths from `user_config.py` and starts the pipeline.
+
+### Options
+
+Pass flags after the launcher:
+
+| Flag | Effect |
+|------|--------|
+| `--dry-run` | Preview all actions without modifying any files |
+| `--skip-metadata` | Validate and move files only; skip metadata writing |
+| `--metadata-only` | Write metadata to already-ingested files (requires author code) |
+
+---
+
+## What the pipeline does
+
+1. **Validate** each file in the source directory
+    - File type: must be a supported image format
+    - Filename structure: `FIRST_[ID_]DATE[_FREETEXT][_SUFFIX]`
+        - `FIRST` — 4 characters validated against _Mediastandard_ character sets
+        - `ID` — optional; numeric or alphanumeric, hyphen-separated
+        - `DATE` — `YYYY-MM-DD`
+        - `FREETEXT` — optional; lowercase alphanumerics and hyphens
+        - `SUFFIX` — optional; `s-` prefix followed by allowed tokens
+    - ICC profile: must be eciRGB v2 or Gray Gamma 2.2
+    - Required metadata tags must be present (or will be written)
+
+2. **Move** valid files into the destination, organised into subdirectories by category prefix
+
+3. **Write metadata** from your personal preset (`presets/abc-metadata.txt`)
+
+4. **Create a `.jpg` derivative** for each valid primary file
+
+5. **Move invalid files** into a timestamped `skipped_files` folder in the source directory
+
+6. **Log** all actions to `__log__/` in both source and destination
+
+---
+
+## Adding a new user
+
+Run `python3 onboard.py` and follow the prompts. This creates:
+
+- `presets/abc-metadata.txt` — personal metadata (Creator, Rights, Relation, contact details)
+- `user_config.py` — local paths and author code (not committed to git)
+
+To edit your metadata after setup, open `presets/abc-metadata.txt` directly.
+
+---
+
+## Staging
+
+For faster processing when the destination is a slow external drive, set a staging directory in `user_config.py`:
+
+```python
+STAGING_DIR = "/path/to/fast/local/drive"
+```
+
+All processing happens on the fast drive first; files are bulk-copied to the destination at the end.
+
+---
+
+[^1]: KMB-Mediastandard Version 3.0.1, 2025. [medienstandard.kumu.swiss](https://medienstandard.kumu.swiss/) · [fotografie.kumu.swiss](https://fotografie.kumu.swiss/)
