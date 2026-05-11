@@ -9,10 +9,19 @@ import warnings
 from collections import Counter
 from datetime import datetime, timezone
 
-PROJECT_ROOT = os.path.dirname(__file__)
-MODULES_DIR = os.path.join(PROJECT_ROOT, "modules")
+INTERNAL_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT    = os.path.dirname(INTERNAL_DIR)
+MODULES_DIR  = os.path.join(INTERNAL_DIR, "modules")
 if MODULES_DIR not in sys.path:
     sys.path.insert(0, MODULES_DIR)
+# REPO_ROOT on sys.path lets variables.py pick up user_config.py at repo root
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+# Allow a project-local bin/ to hold ExifTool on systems without admin rights.
+_local_bin = os.path.join(REPO_ROOT, "bin")
+if os.path.isdir(_local_bin):
+    os.environ["PATH"] = _local_bin + os.pathsep + os.environ.get("PATH", "")
 
 from PIL import Image
 
@@ -126,7 +135,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    resources_dir = os.path.join(PROJECT_ROOT, "resources")
+    resources_dir = os.path.join(REPO_ROOT, "presets")
     exif_args = None
 
     if args.metadata_only and args.skip_metadata:

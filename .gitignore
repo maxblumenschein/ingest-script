@@ -1,1 +1,6 @@
 .DS_Store
+user_config.py
+bin/
+venv/
+__pycache__/
+*.pyc
