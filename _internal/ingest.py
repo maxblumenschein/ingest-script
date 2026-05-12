@@ -2,6 +2,7 @@
 """CLI entrypoint for ingest pipeline."""
 
 import argparse
+import logging
 import os
 import shutil
 import sys
@@ -78,8 +79,14 @@ def _finish():
 def _copy_staging_to_dst():
     print(f'\nCopying to destination …')
     logger.info("Bulk copy  staging=%s  DST=%s", STAGING_DIR, DST)
-    for handler in logger.handlers:
+
+    # Close log file handlers before copy — Windows locks open files
+    file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
+    for handler in file_handlers:
         handler.flush()
+        handler.close()
+        logger.removeHandler(handler)
+
     try:
         all_files = [
             os.path.join(dp, f)
@@ -101,7 +108,10 @@ def _copy_staging_to_dst():
         logger.error("Staging copy failed: %s", e)
         print(f'\n  ! Copy to destination failed: {e}')
         print(f'    Files are safe in staging dir: {STAGING_DIR}')
-
+    finally:
+        # Reattach file handlers after copy
+        for handler in file_handlers:
+            logger.addHandler(handler)
 
 # === Metadata-only mode ===
 
