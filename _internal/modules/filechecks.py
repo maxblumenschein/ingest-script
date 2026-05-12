@@ -164,7 +164,7 @@ def is_valid_icc_profile(metadata):
 def get_metadata_tags(file_path):
     import subprocess, json
     try:
-        res = subprocess.run(['exiftool', '-j', file_path], capture_output=True, text=True, check=True)
+        res = subprocess.run(['exiftool', '-j', file_path], capture_output=True, text=True, encoding='utf-8', check=True)
         data = json.loads(res.stdout)
         return data[0] if data else {}
     except Exception as e:

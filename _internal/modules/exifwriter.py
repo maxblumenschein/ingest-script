@@ -41,7 +41,7 @@ def write_metadata_to_file(target_path, metadata_args, dry_run=False, logger=Non
         return True
 
     try:
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8', check=True)
         if proc.stderr:
             logger.warning('exiftool stderr: %s', proc.stderr.strip())
         return True
@@ -65,7 +65,7 @@ def ensure_xmp_create_date(file_path, dry_run=False, logger=None):
     try:
         proc = subprocess.run(
             ['exiftool', '-j', '-XMP-xmp:CreateDate', file_path],
-            capture_output=True, text=True, check=True
+            capture_output=True, text=True, encoding='utf-8', check=True
         )
         data = json.loads(proc.stdout)
         if data and data[0].get('CreateDate'):
@@ -101,7 +101,7 @@ def ensure_xmp_create_date(file_path, dry_run=False, logger=None):
     try:
         proc = subprocess.run(
             ['exiftool', '-overwrite_original', f'-XMP-xmp:CreateDate={iso_val}', file_path],
-            capture_output=True, text=True, check=True
+            capture_output=True, text=True, encoding='utf-8', check=True
         )
         if proc.stderr:
             logger.warning('%s: exiftool: %s', fname, proc.stderr.strip())
