@@ -100,6 +100,9 @@ def _copy_staging_to_dst():
             dst_file = os.path.join(DST, rel)
             _progress(i, total, os.path.basename(src_file))
             os.makedirs(os.path.dirname(dst_file), exist_ok=True)
+            if os.path.exists(dst_file):
+                logger.info("Already at destination, skipping: %s", os.path.basename(dst_file))
+                continue
             shutil.copy2(src_file, dst_file)
         print()
         shutil.rmtree(STAGING_DIR)
