@@ -337,7 +337,12 @@ def _detect_colorchecker_mini(img_rgb, reference, n_rows=_N_ROWS, n_cols=_N_COLS
     lum = 0.2126 * r_ch + 0.7152 * g_ch + 0.0722 * b_ch
     cmax = np.maximum(np.maximum(r_ch, g_ch), b_ch)
     cmin = np.minimum(np.minimum(r_ch, g_ch), b_ch)
-    sat = np.where(cmax > 1e-6, (cmax - cmin) / cmax, 0.0)
+    # np.where(cond, a/b, 0.0) still evaluates a/b for every element — including
+    # where b=0 (pure black pixels) — triggering a spurious "invalid value in
+    # divide" warning even though that 0/0 result is immediately discarded.
+    # np.divide's `where=` skips the division there entirely instead.
+    sat = np.zeros_like(cmax)
+    np.divide(cmax - cmin, cmax, out=sat, where=cmax > 1e-6)
 
     # Expected neutral-row display values converted from reference L* values
     ref_L = np.array([21.17, 36.28, 50.80, 66.88, 81.56, 97.18])
