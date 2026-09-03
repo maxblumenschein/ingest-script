@@ -12,6 +12,15 @@ SKIPPED = "skipped_files"
 # Set to None to write directly to DST.
 STAGING_DIR = "/tmp/ingest-staging"
 
+# Color accuracy check via ColorChecker Mini.
+# Set COLORCHECK_REFERENCE to an absolute path of a CGATS.17 measurement file to enable.
+# Override in user_config.py.
+COLORCHECK_REFERENCE = None
+COLORCHECK_MEAN_DE_THRESHOLD = 4.0     # Colour accuracy: mean ΔE2000
+COLORCHECK_MAX_DE_THRESHOLD = 10.0     # Colour accuracy: max ΔE2000
+COLORCHECK_WB_THRESHOLD = 2.0          # White balance: ΔE(a*b*), grey patches
+COLORCHECK_EXPOSURE_THRESHOLD = 2.0    # Exposure: ΔL*2000, grey patches (mean)
+
 # How to organize subdirectories:
 #  - "id"     = group by ID segment
 #  - "prefix" = group by characters 2–4 of first segment

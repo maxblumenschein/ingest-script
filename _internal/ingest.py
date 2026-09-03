@@ -30,13 +30,18 @@ warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
 Image.MAX_IMAGE_PIXELS = 405_000_000
 
 from modules.exifwriter import has_exiftool, write_metadata_to_file
-from modules.filechecks import delete_empty_dirs, get_metadata_tags, has_required_metadata, is_image_file
+from modules.filechecks import (delete_empty_dirs, get_metadata_tags, has_color_target_view,
+                                has_required_metadata, is_image_file)
 from modules.fileops import move_file
 from modules.imageops import create_jpg_derivative
 from modules.logging_utils import setup_logging
 from modules.metadata import MetadataPresetError, load_preset_for_code
 from modules.planner import build_plan
-from variables import DST, SKIPPED, SRC, STAGING_DIR, SUBDIR_MODE, required_metadata_tags
+from variables import (DST, SKIPPED, SRC, STAGING_DIR, SUBDIR_MODE,
+                       COLORCHECK_REFERENCE, COLORCHECK_MEAN_DE_THRESHOLD,
+                       COLORCHECK_MAX_DE_THRESHOLD, COLORCHECK_WB_THRESHOLD,
+                       COLORCHECK_EXPOSURE_THRESHOLD,
+                       required_metadata_tags)
 
 # When a staging dir is configured, all processing happens there; the result is
 # bulk-copied to DST at the end. Use DST directly if no staging is set.
@@ -208,6 +213,8 @@ def main():
     total = len(plan)
     ok = 0
     err_list = []
+    colorcheck_fail_list = []
+    colorcheck_notfound_list = []
 
     for i, item in enumerate(plan, 1):
         _progress(i, total, item['fname'])
@@ -260,7 +267,32 @@ def main():
                         move_file(target_path, skipped_dir, 'missing required metadata',
                                   dry_run=False, logger=logger)
 
-            # 6. Derivative
+            # 6. Color accuracy check (only when a reference file is configured,
+            # and only for the naming convention's designated view that
+            # actually includes the calibration target — e.g. gw1a, not
+            # gw11/gw1r/gw1d/... which never show it).
+            # Runs before the derivative so its PASS/FAIL/ΔE tags are part of
+            # the metadata snapshot the derivative copies from the master.
+            if (_ok and not args.dry_run and COLORCHECK_REFERENCE
+                   and has_color_target_view(item['fname'])):
+                try:
+                    from modules.colorcheck import run_color_accuracy_check
+                    ccheck = run_color_accuracy_check(
+                        target_path, COLORCHECK_REFERENCE, logger,
+                        mean_de_threshold=COLORCHECK_MEAN_DE_THRESHOLD,
+                        max_de_threshold=COLORCHECK_MAX_DE_THRESHOLD,
+                        wb_threshold=COLORCHECK_WB_THRESHOLD,
+                        exposure_threshold=COLORCHECK_EXPOSURE_THRESHOLD)
+                    if not ccheck or not ccheck.get('found') or 'pass' not in ccheck:
+                        colorcheck_notfound_list.append(item['fname'])
+                    elif not ccheck['pass']:
+                        colorcheck_fail_list.append((item['fname'], ccheck))
+                except Exception as e:
+                    logger.warning("Color check error for %s: %s", item['fname'], e)
+                    colorcheck_notfound_list.append(item['fname'])
+
+            # 7. Derivative (runs after the color check, so the derivative's
+            # metadata copy picks up the Instructions field the check appended to)
             if _ok and not args.dry_run:
                 create_jpg_derivative(target_path, item['derivative_dir'],
                                       item['fname'], logger=logger)
@@ -279,6 +311,22 @@ def main():
         print()
         for fname, reason in err_list:
             print(f'  ! {fname}  —  {reason[:80]}')
+
+    if colorcheck_fail_list or colorcheck_notfound_list:
+        print('\nColor accuracy:')
+        for fname, ccheck in colorcheck_fail_list:
+            reasons = []
+            if not ccheck['pass_color']:
+                reasons.append(f"ΔE2000 mean={ccheck['mean_de']:.2f} max={ccheck['max_de']:.2f}")
+            if not ccheck['pass_wb']:
+                reasons.append(f"WB ΔE(a*b*)={ccheck['mean_de_ab_grey']:.2f}")
+            if not ccheck['pass_exposure']:
+                reasons.append(f"Exposure ΔL*2000={ccheck['mean_dl2000_grey']:.2f}")
+            print(f'  ✗ {fname}  —  FAIL ({", ".join(reasons)})')
+        for fname in colorcheck_notfound_list:
+            print(f'  ? {fname}  —  no calibration target detected')
+        logger.info("Color accuracy summary: %d fail, %d not detected",
+                   len(colorcheck_fail_list), len(colorcheck_notfound_list))
 
     print(f'\nDone  —  {ok} ingested · {len(err_list)} error(s) · {len(skipped)} skipped')
 

@@ -22,6 +22,19 @@ def is_valid_first_segment(first_segment, valid_first_chars, valid_other_strings
     return len(first_segment) == 4 and first_segment[0] in valid_first_chars and first_segment[1:] in valid_other_strings
 
 
+def has_color_target_view(file_name):
+    """
+    True if this file's category code follows the '<letter>wNa' scheme
+    (e.g. gw1a, kw2a) — the naming convention's designated view that
+    includes the calibration target. Other w-codes (w11, w1r, w1d, w1s, ...)
+    are different view types that never show it, so the color-accuracy
+    check should never even attempt them.
+    """
+    base, _ = os.path.splitext(file_name)
+    first_segment = base.split('_')[0]
+    return bool(re.fullmatch(r'w[1-9]a', first_segment[1:5]))
+
+
 def is_valid_date_segment(date_segment):
     from datetime import datetime
     try:
