@@ -261,6 +261,9 @@ SRC          = {src!r}
 DST          = {dst!r}
 STAGING_DIR  = {staging!r}
 SUBDIR_MODE  = {subdir_mode!r}
+
+# Color accuracy check (optional). Set to None to disable.
+COLORCHECK_REFERENCE = {colorcheck_reference!r}
 """
 
 
@@ -303,12 +306,27 @@ def _create_user_config(author_code):
         _warn(f"Unknown mode '{subdir_mode}', using 'prefix'")
         subdir_mode = "prefix"
 
+    print(textwrap.dedent("""\
+
+      Color accuracy check (optional) — compares a ColorChecker Mini
+      target photographed in your images against reference measurements,
+      flags files whose color, white balance, or exposure drift out of
+      spec, and records the result in each file's metadata. It only runs
+      on the naming convention's 'wNa' view (the one that includes the
+      target), and does nothing unless enabled here.
+    """))
+    colorcheck_reference = None
+    if _confirm("Enable the color accuracy check?"):
+        colorcheck_reference = _ask_path(
+            "Path to the CGATS.17 reference measurement file (.txt)", required=True)
+
     content = _USER_CONFIG_TEMPLATE.format(
         author_code=author_code,
         src=src,
         dst=dst,
         staging=staging,
         subdir_mode=subdir_mode,
+        colorcheck_reference=colorcheck_reference,
     )
 
     with open(USER_CONFIG, "w", encoding="utf-8") as fh:
