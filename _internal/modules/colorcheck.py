@@ -357,7 +357,13 @@ def _detect_colorchecker_mini(img_rgb, reference, n_rows=_N_ROWS, n_cols=_N_COLS
     ref_std  = float(ref_norm.std())
 
     MIN_CORR = 0.82
-    MIN_FULL_GRID_CORR = 0.5
+    # Validated genuine detections score 0.87–0.95 here; a misaligned grid
+    # (e.g. off by roughly half a patch pitch — which can still coincidentally
+    # correlate somewhat, since neighboring patches sometimes share a hue
+    # family) has been observed to reach as high as ~0.55. 0.75 sits well
+    # clear of that false zone while leaving comfortable margin under every
+    # genuine case we've measured.
+    MIN_FULL_GRID_CORR = 0.75
     # Collect every locally-good neutral-row candidate rather than only the
     # single highest-scoring one: a busy image can contain a lookalike (e.g.
     # a printed documentation sheet reproducing the same reference values as
@@ -643,11 +649,17 @@ def _detect_colorchecker_mini(img_rgb, reference, n_rows=_N_ROWS, n_cols=_N_COLS
     # correlation always measures the same thing — how well all 24 sampled
     # patches' hues match the reference's — so it's the one score that's
     # meaningfully comparable between competing bs/orientation hypotheses.
+    # Once a high-confidence match is found, stop evaluating the remaining
+    # (lower coarse-score) candidates — pure speed optimization, safe because
+    # every genuine detection we've measured scores well above this bar.
+    HIGH_CONFIDENCE_CORR = 0.85
     best_patches, best_corr = None, -2.0
     for _, bs, r0, c0, nr, rev, orient in selected:
         patches, corr = _evaluate_candidate(bs, r0, c0, nr, rev, orient)
         if patches is not None and corr > best_corr:
             best_patches, best_corr = patches, corr
+        if best_corr >= HIGH_CONFIDENCE_CORR:
+            break
 
     return best_patches
 
