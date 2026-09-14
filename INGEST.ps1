@@ -34,7 +34,7 @@ if ($IsWin) {
 }
 
 & $PythonExe -m pip install --quiet --upgrade pip
-& $PythonExe -m pip install --quiet -r (Join-Path $ScriptDir "_internal" "requirements.txt")
+& $PythonExe -m pip install --quiet -r (Join-Path (Join-Path $ScriptDir "_internal") "requirements.txt")
 
 # Read author code from user_config.py
 $AuthorCode = & $PythonExe -c "from user_config import AUTHOR_CODE; print(AUTHOR_CODE)" 2>$null
@@ -47,5 +47,5 @@ if (-not $AuthorCode) {
     exit 1
 }
 
-$PythonScript = Join-Path $ScriptDir "_internal" "ingest.py"
+$PythonScript = (Join-Path (Join-Path $ScriptDir "_internal") "ingest.py")
 & $PythonExe $PythonScript $AuthorCode @args
