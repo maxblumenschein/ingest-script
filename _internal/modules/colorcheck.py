@@ -138,7 +138,7 @@ def _delta_e_ab(lab1, lab2):
 
 
 def _delta_l_2000(lab1, lab2):
-    """CIEDE2000 lightness term (SL-weighted ΔL*), independent of chroma/hue."""
+    """CIEDE2000 lightness term (SL-weighted dL*), independent of chroma/hue."""
     L1, _, _ = lab1
     L2, _, _ = lab2
     dLp = L2 - L1
@@ -713,9 +713,9 @@ def run_color_accuracy_check(image_path, reference_path, logger,
     the ingest log as a formatted table.
 
     Three independent criteria are evaluated:
-      - Colour accuracy: mean ΔE2000 ≤ mean_de_threshold, max ΔE2000 ≤ max_de_threshold
-      - White balance:   ΔE(a*b*)  (grey patches) ≤ wb_threshold
-      - Exposure:        ΔL*2000   (grey patches, mean |·|) ≤ exposure_threshold
+      - Colour accuracy: mean dE2000 ≤ mean_de_threshold, max dE2000 ≤ max_de_threshold
+      - White balance:   dE(a*b*)  (grey patches) ≤ wb_threshold
+      - Exposure:        dL*2000   (grey patches, mean |·|) ≤ exposure_threshold
 
     Returns a report dict, or None on hard failure.
     """
@@ -783,10 +783,10 @@ def run_color_accuracy_check(image_path, reference_path, logger,
     passed        = pass_color and pass_wb and pass_exposure
 
     # --- log table ---
-    logger.info("Color check  %s  —  %d patches  ΔE2000 thresholds: avg≤%.1f max≤%.1f",
+    logger.info("Color check  %s  —  %d patches  dE2000 thresholds: avg≤%.1f max≤%.1f",
                 fname, len(results), mean_de_threshold, max_de_threshold)
     logger.info("  %-4s  %6s %6s %6s    %6s %6s %6s    %s",
-                "ID", "L*ref", "a*ref", "b*ref", "L*meas", "a*meas", "b*meas", "ΔE2000")
+                "ID", "L*ref", "a*ref", "b*ref", "L*meas", "a*meas", "b*meas", "dE2000")
     logger.info("  " + "-" * 66)
     for pid in _PATCH_IDS:
         if pid not in results:
@@ -799,13 +799,13 @@ def run_color_accuracy_check(image_path, reference_path, logger,
         logger.info("  %-4s  %6.2f %6.2f %6.2f    %6.2f %6.2f %6.2f    %5.2f%s",
                     pid, Lr, ar, br, Lm, am, bm, de, flag)
 
-    logger.info("  Colour accuracy:          mean ΔE2000=%.2f (≤%.1f)  max ΔE2000=%.2f (%s, ≤%.1f)  → %s",
+    logger.info("  Colour accuracy:          mean dE2000=%.2f (≤%.1f)  max dE2000=%.2f (%s, ≤%.1f)  → %s",
                 mean_de, mean_de_threshold, max_de, max_patch, max_de_threshold,
                 "PASS" if pass_color else "FAIL")
     if mean_de_ab_grey is not None:
-        logger.info("  White balance (grey):     ΔE(a*b*)=%.2f (≤%.1f)  → %s",
+        logger.info("  White balance (grey):     dE(a*b*)=%.2f (≤%.1f)  → %s",
                     mean_de_ab_grey, wb_threshold, "PASS" if pass_wb else "FAIL")
-        logger.info("  Exposure (grey):          ΔL*2000=%.2f (≤%.1f)  → %s",
+        logger.info("  Exposure (grey):          dL*2000=%.2f (≤%.1f)  → %s",
                     mean_dl2000_grey, exposure_threshold, "PASS" if pass_exposure else "FAIL")
 
     status = "PASS" if passed else "FAIL"
@@ -855,12 +855,12 @@ def _write_colorcheck_metadata(image_path, report, logger):
 
     from modules.exifwriter import write_metadata_to_file
 
-    parts = [f"mean ΔE2000={report['mean_de']:.2f}",
-            f"max ΔE2000={report['max_de']:.2f}"]
+    parts = [f"mean dE2000={report['mean_de']:.2f}",
+            f"max dE2000={report['max_de']:.2f}"]
     if report['mean_de_ab_grey'] is not None:
-        parts.append(f"WB ΔE(a*b*)={report['mean_de_ab_grey']:.2f}")
+        parts.append(f"WB dE(a*b*)={report['mean_de_ab_grey']:.2f}")
     if report['mean_dl2000_grey'] is not None:
-        parts.append(f"Exposure ΔL*2000={report['mean_dl2000_grey']:.2f}")
+        parts.append(f"Exposure dL*2000={report['mean_dl2000_grey']:.2f}")
     status = 'PASS' if report['pass'] else 'FAIL'
     summary = f"Color accuracy: {status} ({'; '.join(parts)})"
 
