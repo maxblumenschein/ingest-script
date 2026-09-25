@@ -49,6 +49,8 @@ def build_exiftool_args_from_preset(preset):
     mapping = {
         "Creator": "XMP-dc:Creator",
         "Rights": "XMP-dc:Rights",
+        "Copyright": "EXIF:Copyright",
+        "Copyright Notice": "IPTC:CopyrightNotice",
         "Relation": "XMP-dc:Relation",
         "CreateDate": "XMP-xmp:CreateDate",
         "Authors Position": "XMP-photoshop:AuthorsPosition",
