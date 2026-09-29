@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-First-time setup for the ingest pipeline.
+First-time setup for the processing pipeline.
 
-Run once before using INGEST / INGEST.ps1:
+Run once before using PROCESS / PROCESS.ps1:
     python3 onboard.py        (macOS / Linux)
     python  onboard.py        (Windows)
 
@@ -121,7 +121,7 @@ def _check_exiftool():
 
     local_name = "exiftool.exe" if IS_WINDOWS else "exiftool"
     if os.path.isfile(os.path.join(BIN_DIR, local_name)):
-        _ok(f"ExifTool found in bin/  (used automatically by ingest.py)")
+        _ok(f"ExifTool found in bin/  (used automatically by process.py)")
         return
 
     _err("ExifTool not found")
@@ -135,7 +135,7 @@ def _check_exiftool():
               3. Create a  bin\\  folder inside this project and put
                  exiftool.exe there:
                      bin\\exiftool.exe
-              ingest.py will find it automatically.
+              process.py will find it automatically.
         """), "  "))
     elif shutil.which("brew"):
         print("  Install with:  brew install exiftool")
@@ -209,9 +209,9 @@ def _create_user_preset():
     print(textwrap.dedent("""\
 
       Each user needs a personal preset file so that your name, institution,
-      and contact details are written into every image you ingest.
+      and contact details are written into every image you process.
 
-      The author code becomes your CLI identifier, e.g.  ./INGEST blm
+      The author code becomes your CLI identifier, e.g.  ./PROCESS blm
     """))
 
     code = _ask_code()
@@ -259,6 +259,8 @@ AUTHOR_CODE  = {author_code!r}
 
 SRC          = {src!r}
 DST          = {dst!r}
+PRIMARY_DST     = {primary_dst!r}
+DERIVATIVE_DST  = {derivative_dst!r}
 STAGING_DIR  = {staging!r}
 SUBDIR_MODE  = {subdir_mode!r}
 
@@ -281,7 +283,7 @@ def _create_user_config(author_code):
 
     print(textwrap.dedent("""\
 
-      Source      — folder containing photos to ingest
+      Source      — folder containing photos to process
                     (you can use a different folder each time; this is the default)
       Destination — where processed files and derivatives are written
       Staging     — optional fast local drive for intermediate processing;
@@ -291,6 +293,21 @@ def _create_user_config(author_code):
 
     src     = _ask_path("Source directory", required=True)
     dst     = _ask_path("Destination directory", required=True)
+
+    primary_dst = None
+    derivative_dst = None
+    print(textwrap.dedent("""\
+
+      By default, both original files and JPG derivatives are written under
+      the destination directory (as destination/primary and
+      destination/derivative). You can instead send them to two separate
+      locations — e.g. originals to a slow archive drive, derivatives to a
+      fast local drive for quick browsing.
+    """))
+    if _confirm("Use separate directories for primary and derivative files?"):
+        primary_dst = _ask_path("Primary (original) files directory", required=True)
+        derivative_dst = _ask_path("Derivative (JPG) files directory", required=True)
+
     staging = _ask_path("Staging directory  (optional — leave blank to skip)")
     staging = staging if staging else None
 
@@ -324,6 +341,8 @@ def _create_user_config(author_code):
         author_code=author_code,
         src=src,
         dst=dst,
+        primary_dst=primary_dst,
+        derivative_dst=derivative_dst,
         staging=staging,
         subdir_mode=subdir_mode,
         colorcheck_reference=colorcheck_reference,
@@ -341,7 +360,7 @@ def _create_user_config(author_code):
 def main():
     print()
     _hr("═")
-    print("  Ingest pipeline — first-time setup")
+    print("  Processing pipeline — first-time setup")
     _hr("═")
     print()
     _hr()
@@ -361,10 +380,10 @@ def main():
     _hr("═")
     print()
     if IS_WINDOWS:
-        print("  To run ingest:   .\\INGEST.ps1")
+        print("  To run process:   .\\PROCESS.ps1")
         print("  To re-run setup: python onboard.py")
     else:
-        print("  To run ingest:   ./INGEST")
+        print("  To run process:   ./PROCESS")
         print("  To re-run setup: python3 onboard.py")
     print()
 

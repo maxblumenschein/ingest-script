@@ -7,7 +7,7 @@ from io import BytesIO
 import numpy as np
 from PIL import Image, ImageCms
 
-logger = logging.getLogger('ingest')
+logger = logging.getLogger('process')
 
 _N_ROWS = 4
 _N_COLS = 6
@@ -710,7 +710,7 @@ def run_color_accuracy_check(image_path, reference_path, logger,
     """
     Detect a ColorChecker Mini in *image_path*, measure each patch, and
     compare against *reference_path* (CGATS.17).  Results are written to
-    the ingest log as a formatted table.
+    the process log as a formatted table.
 
     Three independent criteria are evaluated:
       - Colour accuracy: mean dE2000 ≤ mean_de_threshold, max dE2000 ≤ max_de_threshold

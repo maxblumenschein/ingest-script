@@ -6,7 +6,7 @@ import subprocess
 
 def move_file(src, dst, reason, dry_run=False, logger=None):
     if logger is None:
-        logger = logging.getLogger('ingest')
+        logger = logging.getLogger('process')
     if dry_run:
         logger.info('[DRY-RUN] Move: %s -> %s (%s)', src, dst, reason)
         return
@@ -21,7 +21,7 @@ def move_file(src, dst, reason, dry_run=False, logger=None):
 
 def copy_metadata_with_exiftool(src_path, dst_path, logger=None):
     if logger is None:
-        logger = logging.getLogger('ingest')
+        logger = logging.getLogger('process')
     if shutil.which('exiftool') is None:
         logger.warning('exiftool not found; cannot copy metadata')
         return

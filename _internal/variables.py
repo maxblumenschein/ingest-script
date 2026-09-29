@@ -6,11 +6,18 @@ SRC = os.path.join(script_dir, "test_source")
 DST = os.path.join(script_dir, "test_destination")
 SKIPPED = "skipped_files"
 
+# Optional: put primary (original) and derivative (JPG) files in separate
+# locations, e.g. originals on a slow archive drive and derivatives on a
+# fast local drive for quick browsing. Leave both as None to use the
+# default DST/primary and DST/derivative layout. Override in user_config.py.
+PRIMARY_DST = None
+DERIVATIVE_DST = None
+
 # Optional staging directory on a fast local drive.
 # When set, all processing happens here first; at the end the result is
 # bulk-copied to DST in one pass (much faster when DST is an external drive).
 # Set to None to write directly to DST.
-STAGING_DIR = "/tmp/ingest-staging"
+STAGING_DIR = "/tmp/process-staging"
 
 # Color accuracy check via ColorChecker Mini.
 # Set COLORCHECK_REFERENCE to an absolute path of a CGATS.17 measurement file to enable.
@@ -32,6 +39,12 @@ try:
     from user_config import *  # noqa: F401, F403
 except ImportError:
     pass
+
+# Resolve primary/derivative defaults after overrides are applied.
+if not PRIMARY_DST:
+    PRIMARY_DST = os.path.join(DST, "primary")
+if not DERIVATIVE_DST:
+    DERIVATIVE_DST = os.path.join(DST, "derivative")
 
 # load resources
 with open(

@@ -1,4 +1,4 @@
-# Ingest
+# Process
 
 Moves image files from a source directory to a destination directory. Files are validated against _Mediastandard_[^1] conventions before processing. Valid files are moved, tagged with personal metadata, and a `.jpg` derivative is generated. Invalid files are collected in a `skipped_files` folder.
 
@@ -42,8 +42,8 @@ Python 3.9 or newer is required.
 ## Daily use
 
 ```
-./INGEST          # macOS / Linux
-./INGEST.ps1      # Windows (PowerShell)
+./PROCESS          # macOS / Linux
+./PROCESS.ps1      # Windows (PowerShell)
 ```
 
 The launcher reads your author code and paths from `user_config.py` and starts the pipeline.
@@ -56,7 +56,7 @@ Pass flags after the launcher:
 |------|--------|
 | `--dry-run` | Preview all actions without modifying any files |
 | `--skip-metadata` | Validate and move files only; skip metadata writing |
-| `--metadata-only` | Write metadata to already-ingested files (requires author code) |
+| `--metadata-only` | Write metadata to already-processed files (requires author code) |
 
 ---
 

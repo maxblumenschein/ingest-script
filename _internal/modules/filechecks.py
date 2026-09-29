@@ -203,11 +203,11 @@ def has_required_metadata(metadata, file_name, required_metadata_tags):
 
 def delete_empty_dirs(root_dir, logger=None):
     if logger is None:
-        logger = logging.getLogger('ingest')
+        logger = logging.getLogger('process')
     for dirpath, dirnames, filenames in os.walk(root_dir, topdown=False):
         if not dirnames and not filenames:
             name = os.path.basename(dirpath)
-            if not name.startswith(('skipped', 'ingest_skipped', 'log', '__log__')):
+            if not name.startswith(('skipped', 'process_skipped', 'log', '__log__')):
                 try:
                     os.rmdir(dirpath)
                     logger.info('Deleted empty directory: %s', dirpath)

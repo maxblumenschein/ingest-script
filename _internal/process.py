@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI entrypoint for ingest pipeline."""
+"""CLI entrypoint for processing pipeline."""
 
 import argparse
 import logging
@@ -37,27 +37,32 @@ from modules.imageops import create_jpg_derivative
 from modules.logging_utils import setup_logging
 from modules.metadata import MetadataPresetError, load_preset_for_code
 from modules.planner import build_plan
-from variables import (DST, SKIPPED, SRC, STAGING_DIR, SUBDIR_MODE,
-                       COLORCHECK_REFERENCE, COLORCHECK_MEAN_DE_THRESHOLD,
+from variables import (DST, PRIMARY_DST, DERIVATIVE_DST, SKIPPED, SRC, STAGING_DIR,
+                       SUBDIR_MODE, COLORCHECK_REFERENCE, COLORCHECK_MEAN_DE_THRESHOLD,
                        COLORCHECK_MAX_DE_THRESHOLD, COLORCHECK_WB_THRESHOLD,
                        COLORCHECK_EXPOSURE_THRESHOLD,
                        required_metadata_tags)
 
-# When a staging dir is configured, all processing happens there; the result is
-# bulk-copied to DST at the end. Use DST directly if no staging is set.
+# When a staging dir is configured, all processing happens there (under
+# primary/ and derivative/ subfolders); the result is bulk-copied to
+# PRIMARY_DST / DERIVATIVE_DST at the end. Otherwise write directly there.
 effective_dst = STAGING_DIR if STAGING_DIR else DST
+effective_primary_dst = os.path.join(STAGING_DIR, "primary") if STAGING_DIR else PRIMARY_DST
+effective_derivative_dst = os.path.join(STAGING_DIR, "derivative") if STAGING_DIR else DERIVATIVE_DST
 
 # === Logging ===
 now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
 log_dir = os.path.join(effective_dst, "__log__")
 os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f"ingest_{date_suffix}.log")
+log_file = os.path.join(log_dir, f"process_{date_suffix}.log")
 logger = setup_logging(log_file)
 if STAGING_DIR:
-    logger.info("Starting ingest  SRC=%s  DST=%s  staging=%s", SRC, DST, STAGING_DIR)
+    logger.info("Starting process  SRC=%s  PRIMARY_DST=%s  DERIVATIVE_DST=%s  staging=%s",
+               SRC, PRIMARY_DST, DERIVATIVE_DST, STAGING_DIR)
 else:
-    logger.info("Starting ingest  SRC=%s  DST=%s", SRC, DST)
+    logger.info("Starting process  SRC=%s  PRIMARY_DST=%s  DERIVATIVE_DST=%s",
+               SRC, PRIMARY_DST, DERIVATIVE_DST)
 
 
 # === Terminal UI helpers ===
@@ -78,12 +83,13 @@ def _finish():
     except Exception:
         logger.exception("Failed to copy log")
     delete_empty_dirs(SRC, logger)
-    logger.info("Ingest done")
+    logger.info("Processing done")
 
 
 def _copy_staging_to_dst():
     print(f'\nCopying to destination …')
-    logger.info("Bulk copy  staging=%s  DST=%s", STAGING_DIR, DST)
+    logger.info("Bulk copy  staging=%s  PRIMARY_DST=%s  DERIVATIVE_DST=%s",
+               STAGING_DIR, PRIMARY_DST, DERIVATIVE_DST)
 
     # Close log file handlers before copy — Windows locks open files
     file_handlers = [h for h in logger.handlers if isinstance(h, logging.FileHandler)]
@@ -92,17 +98,26 @@ def _copy_staging_to_dst():
         handler.close()
         logger.removeHandler(handler)
 
+    # Staging holds a primary/ and a derivative/ subtree; each is bulk-copied
+    # to its own real destination (which may live on different drives).
+    roots = [
+        (os.path.join(STAGING_DIR, "primary"), PRIMARY_DST),
+        (os.path.join(STAGING_DIR, "derivative"), DERIVATIVE_DST),
+    ]
+
     try:
         all_files = [
-            os.path.join(dp, f)
-            for dp, _, files in os.walk(STAGING_DIR)
+            (os.path.join(dp, f), staging_root, real_root)
+            for staging_root, real_root in roots
+            for dp, _, files in os.walk(staging_root)
             for f in files
         ]
         total = len(all_files)
-        os.makedirs(DST, exist_ok=True)
-        for i, src_file in enumerate(all_files, 1):
-            rel = os.path.relpath(src_file, STAGING_DIR)
-            dst_file = os.path.join(DST, rel)
+        for _, real_root in roots:
+            os.makedirs(real_root, exist_ok=True)
+        for i, (src_file, staging_root, real_root) in enumerate(all_files, 1):
+            rel = os.path.relpath(src_file, staging_root)
+            dst_file = os.path.join(real_root, rel)
             _progress(i, total, os.path.basename(src_file))
             os.makedirs(os.path.dirname(dst_file), exist_ok=True)
             if os.path.exists(dst_file):
@@ -146,7 +161,7 @@ def run_metadata_only(exif_args, dry_run):
 # === Main ===
 
 def main():
-    parser = argparse.ArgumentParser(description="Ingest pipeline")
+    parser = argparse.ArgumentParser(description="Processing pipeline")
     parser.add_argument("author_code", nargs="?", default=None)
     parser.add_argument("--skip-metadata", action="store_true")
     parser.add_argument("--metadata-only", action="store_true")
@@ -180,7 +195,7 @@ def main():
             _copy_staging_to_dst()
         return
 
-    # === Normal ingest ===
+    # === Normal processing run ===
     preset_tag = f'[{args.author_code}]' if args.author_code else '[no preset]'
     dry_tag = '  dry-run' if args.dry_run else ''
     src_name = os.path.basename(SRC.rstrip('/'))
@@ -192,7 +207,8 @@ def main():
         print(f'  staging: {STAGING_DIR}')
     os.makedirs(skipped_dir, exist_ok=True)
 
-    plan, skipped = build_plan(SRC, effective_dst, SUBDIR_MODE, logger, real_dst=DST)
+    plan, skipped = build_plan(SRC, effective_primary_dst, effective_derivative_dst,
+                               SUBDIR_MODE, logger, real_primary_root=PRIMARY_DST)
     logger.info("Plan: %d files, %d skipped", len(plan), len(skipped))
 
     for path, reason in skipped:
@@ -204,12 +220,12 @@ def main():
     print(f'  {len(plan)} ready  ·  {len(skipped)} skipped{skip_str}')
 
     if not plan:
-        print('\nDone  —  nothing to ingest')
+        print('\nDone  —  nothing to process')
         _finish()
         return
 
     # --- Process ---
-    print(f'\nIngesting  {preset_tag}{dry_tag}')
+    print(f'\nProcessing  {preset_tag}{dry_tag}')
     total = len(plan)
     ok = 0
     err_list = []
@@ -328,7 +344,7 @@ def main():
         logger.info("Color accuracy summary: %d fail, %d not detected",
                    len(colorcheck_fail_list), len(colorcheck_notfound_list))
 
-    print(f'\nDone  —  {ok} ingested · {len(err_list)} error(s) · {len(skipped)} skipped')
+    print(f'\nDone  —  {ok} processed · {len(err_list)} error(s) · {len(skipped)} skipped')
 
     # Cleanup empty skipped dir
     if os.path.exists(skipped_dir) and not os.listdir(skipped_dir):

@@ -37,4 +37,4 @@ if [ -z "${AUTHOR_CODE:-}" ]; then
     exit 1
 fi
 
-python3 "./_internal/ingest.py" "$AUTHOR_CODE" "$@"
+python3 "./_internal/process.py" "$AUTHOR_CODE" "$@"

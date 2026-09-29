@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Cross-platform PowerShell launcher for ingest.py
+# Cross-platform PowerShell launcher for process.py
 # ---------------------------------------------------
 
 Set-StrictMode -Version Latest
@@ -47,5 +47,5 @@ if (-not $AuthorCode) {
     exit 1
 }
 
-$PythonScript = (Join-Path (Join-Path $ScriptDir "_internal") "ingest.py")
+$PythonScript = (Join-Path (Join-Path $ScriptDir "_internal") "process.py")
 & $PythonExe $PythonScript $AuthorCode @args

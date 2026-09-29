@@ -57,7 +57,7 @@ def _to_8bit(img):
 
 def create_jpg_derivative(src_image_path, dst_directory, file_name, logger=None):
     if logger is None:
-        logger = logging.getLogger('ingest')
+        logger = logging.getLogger('process')
     try:
         original = Image.open(src_image_path)
         original = _to_8bit(original)

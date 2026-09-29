@@ -11,7 +11,8 @@ from modules.filechecks import (
 from modules.imageops import can_create_jpg_derivative
 
 
-def build_plan(src_root, dst_root, subdir_mode, logger, real_dst=None):
+def build_plan(src_root, primary_root, derivative_root, subdir_mode, logger,
+                real_primary_root=None):
     """
     Planner validates:
       - file type
@@ -88,16 +89,16 @@ def build_plan(src_root, dst_root, subdir_mode, logger, real_dst=None):
 
             # Destination path
             category_dir, subdir_name = get_destination_subdir(fname, subdir_mode)
-            primary_directory = os.path.join(dst_root, "primary", category_dir, subdir_name)
-            derivative_directory = os.path.join(dst_root, "derivative", category_dir, subdir_name)
+            primary_directory = os.path.join(primary_root, category_dir, subdir_name)
+            derivative_directory = os.path.join(derivative_root, category_dir, subdir_name)
             dst_file = os.path.join(primary_directory, fname)
 
             if os.path.exists(dst_file):
                 skipped.append((fpath, "exists at destination"))
                 continue
             # When staging: also check the real final destination
-            if real_dst and real_dst != dst_root:
-                real_dst_file = os.path.join(real_dst, "primary", category_dir, subdir_name, fname)
+            if real_primary_root and real_primary_root != primary_root:
+                real_dst_file = os.path.join(real_primary_root, category_dir, subdir_name, fname)
                 if os.path.exists(real_dst_file):
                     skipped.append((fpath, "exists at destination"))
                     continue

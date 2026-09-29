@@ -3,7 +3,7 @@ import sys
 
 
 def setup_logging(log_path):
-    logger = logging.getLogger('ingest')
+    logger = logging.getLogger('process')
     logger.setLevel(logging.DEBUG)
     logger.propagate = False  # don't bubble up to root logger
 

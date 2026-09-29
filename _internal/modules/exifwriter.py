@@ -27,7 +27,7 @@ def write_metadata_to_file(target_path, metadata_args, dry_run=False, logger=Non
     metadata_args: list of strings like ['-Creator=Max Mustermann', ...]
     """
     if logger is None:
-        logger = logging.getLogger('ingest')
+        logger = logging.getLogger('process')
 
     if not has_exiftool():
         logger.error('exiftool not found')
@@ -57,7 +57,7 @@ def ensure_xmp_create_date(file_path, dry_run=False, logger=None):
     Returns True on success, False if no plausible date exists.
     """
     if logger is None:
-        logger = logging.getLogger('ingest')
+        logger = logging.getLogger('process')
 
     fname = os.path.basename(file_path)
 
