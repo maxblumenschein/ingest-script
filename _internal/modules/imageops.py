@@ -56,6 +56,7 @@ def _to_8bit(img):
 
 
 def create_jpg_derivative(src_image_path, dst_directory, file_name, logger=None):
+    """Returns True on success, False on failure (failure is logged either way)."""
     if logger is None:
         logger = logging.getLogger('process')
     try:
@@ -69,8 +70,10 @@ def create_jpg_derivative(src_image_path, dst_directory, file_name, logger=None)
         # copy metadata from primary to derivative
         from modules.fileops import copy_metadata_with_exiftool
         copy_metadata_with_exiftool(src_image_path, dst_jpg, logger=logger)
+        return True
     except Exception as e:
         logger.error('Failed to create derivative for %s: %s', file_name, e)
+        return False
 
 
 def can_create_jpg_derivative(src_image_path, file_name):

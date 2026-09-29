@@ -82,6 +82,15 @@ def _finish():
         shutil.copy2(log_file, os.path.join(inlog, os.path.basename(log_file)))
     except Exception:
         logger.exception("Failed to copy log")
+    # When staging is used, PRIMARY_DST doesn't hold the files yet — that copy
+    # happens in _copy_staging_to_dst() instead, right before staging is removed.
+    if not STAGING_DIR:
+        try:
+            primary_log_dir = os.path.join(PRIMARY_DST, "__log__")
+            os.makedirs(primary_log_dir, exist_ok=True)
+            shutil.copy2(log_file, os.path.join(primary_log_dir, os.path.basename(log_file)))
+        except Exception:
+            logger.exception("Failed to copy log to primary destination")
     delete_empty_dirs(SRC, logger)
     logger.info("Processing done")
 
@@ -125,6 +134,15 @@ def _copy_staging_to_dst():
                 continue
             shutil.copy2(src_file, dst_file)
         print()
+        # Deliver a copy of the log alongside the primary archive, before the
+        # staging dir (which currently holds the log file) is removed. Handlers
+        # are detached here, so report failures via print rather than logger.
+        try:
+            primary_log_dir = os.path.join(PRIMARY_DST, "__log__")
+            os.makedirs(primary_log_dir, exist_ok=True)
+            shutil.copy2(log_file, os.path.join(primary_log_dir, os.path.basename(log_file)))
+        except Exception as e:
+            print(f'\n  ! Failed to deliver log copy to primary destination: {e}')
         shutil.rmtree(STAGING_DIR)
         logger.info("Staging copy complete")
     except Exception as e:
@@ -310,8 +328,13 @@ def main():
             # 7. Derivative (runs after the color check, so the derivative's
             # metadata copy picks up the Instructions field the check appended to)
             if _ok and not args.dry_run:
-                create_jpg_derivative(target_path, item['derivative_dir'],
-                                      item['fname'], logger=logger)
+                derivative_ok = create_jpg_derivative(target_path, item['derivative_dir'],
+                                                      item['fname'], logger=logger)
+                if not derivative_ok:
+                    _ok = False
+                    err_list.append((item['fname'], 'failed to create derivative'))
+                    move_file(target_path, skipped_dir, 'failed to create derivative',
+                              dry_run=False, logger=logger)
 
         except Exception as e:
             _ok = False
