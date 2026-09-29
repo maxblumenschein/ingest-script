@@ -1,5 +1,7 @@
 # Process
 
+*Loupe*
+
 Moves image files from a source directory to a destination directory. Files are validated against _Mediastandard_[^1] conventions before processing. Valid files are moved, tagged with personal metadata, and a `.jpg` derivative is generated. Invalid files are collected in a `skipped_files` folder.
 
 ---
