@@ -176,6 +176,83 @@ def run_metadata_only(exif_args, dry_run):
     logger.info("metadata-only completed")
 
 
+# === Color-check-only mode ===
+
+def _print_colorcheck_summary(fail_list, notfound_list):
+    if not (fail_list or notfound_list):
+        return
+    print('\nColor accuracy:')
+    for fname, ccheck in fail_list:
+        reasons = []
+        if not ccheck['pass_color']:
+            reasons.append(f"ΔE2000 mean={ccheck['mean_de']:.2f} max={ccheck['max_de']:.2f}")
+        if not ccheck['pass_wb']:
+            reasons.append(f"WB ΔE(a*b*)={ccheck['mean_de_ab_grey']:.2f}")
+        if not ccheck['pass_exposure']:
+            reasons.append(f"Exposure ΔL*2000={ccheck['mean_dl2000_grey']:.2f}")
+        print(f'  ✗ {fname}  —  FAIL ({", ".join(reasons)})')
+    for fname in notfound_list:
+        print(f'  ? {fname}  —  no calibration target detected')
+    logger.info("Color accuracy summary: %d fail, %d not detected",
+               len(fail_list), len(notfound_list))
+
+
+def run_colorcheck_only():
+    """
+    Check color accuracy against the calibration target only — no move,
+    metadata write, or derivative creation. Files are read in place at SRC
+    and left untouched.
+    """
+    logger.info("Running in colorcheck-only mode")
+    if not COLORCHECK_REFERENCE:
+        print('  error: COLORCHECK_REFERENCE is not configured')
+        sys.exit(2)
+
+    files = []
+    for dirpath, _, filenames in os.walk(SRC):
+        if os.path.basename(dirpath).startswith("skipped") or "__log__" in dirpath:
+            continue
+        files += [os.path.join(dirpath, f) for f in filenames
+                 if is_image_file(f) and has_color_target_view(f)]
+
+    if not files:
+        print('\nNo calibration-target images found')
+        logger.info("colorcheck-only: no matching files")
+        return
+
+    from modules.colorcheck import run_color_accuracy_check
+
+    print(f'\nChecking color accuracy  [{len(files)} file(s)]')
+    fail_list = []
+    notfound_list = []
+    for i, fullpath in enumerate(files, 1):
+        fname = os.path.basename(fullpath)
+        _progress(i, len(files), fname)
+        try:
+            ccheck = run_color_accuracy_check(
+                fullpath, COLORCHECK_REFERENCE, logger,
+                mean_de_threshold=COLORCHECK_MEAN_DE_THRESHOLD,
+                max_de_threshold=COLORCHECK_MAX_DE_THRESHOLD,
+                wb_threshold=COLORCHECK_WB_THRESHOLD,
+                exposure_threshold=COLORCHECK_EXPOSURE_THRESHOLD,
+                write_metadata=False)
+            if not ccheck or not ccheck.get('found') or 'pass' not in ccheck:
+                notfound_list.append(fname)
+            elif not ccheck['pass']:
+                fail_list.append((fname, ccheck))
+        except Exception as e:
+            logger.warning("Color check error for %s: %s", fname, e)
+            notfound_list.append(fname)
+    print()
+
+    _print_colorcheck_summary(fail_list, notfound_list)
+
+    passed = len(files) - len(fail_list) - len(notfound_list)
+    print(f'\nDone  —  {passed} pass · {len(fail_list)} fail · {len(notfound_list)} not detected')
+    logger.info("colorcheck-only completed: %d pass, %d fail, %d not detected",
+               passed, len(fail_list), len(notfound_list))
+
+
 # === Main ===
 
 def main():
@@ -183,6 +260,9 @@ def main():
     parser.add_argument("author_code", nargs="?", default=None)
     parser.add_argument("--skip-metadata", action="store_true")
     parser.add_argument("--metadata-only", action="store_true")
+    parser.add_argument("--colorcheck-only", action="store_true",
+                        help="Only check color accuracy against the calibration "
+                             "target; no move, metadata write, or derivative")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -192,6 +272,15 @@ def main():
     if args.metadata_only and args.skip_metadata:
         print('  error: --metadata-only and --skip-metadata cannot be used together')
         sys.exit(2)
+
+    if args.colorcheck_only and (args.metadata_only or args.skip_metadata):
+        print('  error: --colorcheck-only cannot be combined with --metadata-only or --skip-metadata')
+        sys.exit(2)
+
+    if args.colorcheck_only:
+        run_colorcheck_only()
+        _finish()
+        return
 
     if args.author_code and not args.skip_metadata:
         try:
@@ -351,21 +440,7 @@ def main():
         for fname, reason in err_list:
             print(f'  ! {fname}  —  {reason[:80]}')
 
-    if colorcheck_fail_list or colorcheck_notfound_list:
-        print('\nColor accuracy:')
-        for fname, ccheck in colorcheck_fail_list:
-            reasons = []
-            if not ccheck['pass_color']:
-                reasons.append(f"ΔE2000 mean={ccheck['mean_de']:.2f} max={ccheck['max_de']:.2f}")
-            if not ccheck['pass_wb']:
-                reasons.append(f"WB ΔE(a*b*)={ccheck['mean_de_ab_grey']:.2f}")
-            if not ccheck['pass_exposure']:
-                reasons.append(f"Exposure ΔL*2000={ccheck['mean_dl2000_grey']:.2f}")
-            print(f'  ✗ {fname}  —  FAIL ({", ".join(reasons)})')
-        for fname in colorcheck_notfound_list:
-            print(f'  ? {fname}  —  no calibration target detected')
-        logger.info("Color accuracy summary: %d fail, %d not detected",
-                   len(colorcheck_fail_list), len(colorcheck_notfound_list))
+    _print_colorcheck_summary(colorcheck_fail_list, colorcheck_notfound_list)
 
     print(f'\nDone  —  {ok} processed · {len(err_list)} error(s) · {len(skipped)} skipped')
 

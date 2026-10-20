@@ -600,19 +600,30 @@ def _detect_colorchecker_mini(img_rgb, reference, n_rows=_N_ROWS, n_cols=_N_COLS
         L0, a0, b0 = reference.get(id0, (50.0, 0.0, 0.0))
         L1, a1, b1 = reference.get(id1, (50.0, 0.0, 0.0))
 
-        # Search both far corners independently. Each one, on its own, is a
-        # candidate anchor for the whole far row (the other corner can be
-        # derived from it via the near row's own column vector — same rigid
-        # chart ⇒ same column spacing on every row). Two independently
-        # *searched* positions can each land on a different, wrong row (a
-        # coincidentally-plausible nearer row beating the true, farther
-        # one), and their raw match costs aren't comparable to each other
-        # (different target colors are inherently easier or harder to
-        # match) — so instead of trusting whichever searched corner scored
-        # lower, build the full grid from *each* hypothesis and let the
-        # whole-grid correlation below (comparing all 24 patches against
-        # reference, not just one corner's color) decide which is right.
-        FAR_SEARCH_FRAC = 1.5
+        # Search both far corners independently. Each, on its own, is a
+        # candidate anchor for the whole far row — but deriving the *other*
+        # corner from it via the near row's own column vector assumes the
+        # chart is rigid AND that column spacing is identical on every row,
+        # which only holds for a parallel (affine) projection. Under real
+        # perspective — e.g. the camera not perfectly square-on to the
+        # target — the far row's column vector can differ slightly from the
+        # near row's, and that skew compounds most at the far corner
+        # furthest from the anchor, which is exactly the drift pattern
+        # observed in practice (correct near the neutral row, growing error
+        # toward the far corner). So alongside the two single-corner-derived
+        # hypotheses (kept as a fallback for when only one far-corner search
+        # succeeds), also try using *both* independently found far corners
+        # directly — no rigid extrapolation, so it's immune to that skew.
+        # Two independently *searched* positions can each land on a
+        # different, wrong row (a coincidentally-plausible nearer row
+        # beating the true, farther one), and their raw match costs aren't
+        # comparable to each other (different target colors are inherently
+        # easier or harder to match) — so instead of trusting whichever
+        # searched corner scored lower, build the full grid from *each*
+        # hypothesis and let the whole-grid correlation below (comparing
+        # all 24 patches against reference, not just one or two corners'
+        # colors) decide which is right.
+        FAR_SEARCH_FRAC = 0.5
         best_patches, best_corr = None, -2.0
         for direction in (1, -1):
             est_x0 = near_cx0 + direction * row_dx * (n_rows - 1)
@@ -625,13 +636,20 @@ def _detect_colorchecker_mini(img_rgb, reference, n_rows=_N_ROWS, n_cols=_N_COLS
             far_cx1, far_cy1, far_cost1 = _find_corner_patch_center(
                 img_rgb, int(round(est_x1)), int(round(est_y1)), far_pw, far_ph,
                 L1, a1, b1, search_frac=FAR_SEARCH_FRAC)
-            if not (np.isfinite(far_cost0) and np.isfinite(far_cost1)):
+            far0_ok = np.isfinite(far_cost0)
+            far1_ok = np.isfinite(far_cost1)
+            if not (far0_ok or far1_ok):
                 continue
 
-            hypotheses = [
-                (far_cx0, far_cy0, far_cx0 + (n_cols - 1) * col_dx, far_cy0 + (n_cols - 1) * col_dy),
-                (far_cx1 - (n_cols - 1) * col_dx, far_cy1 - (n_cols - 1) * col_dy, far_cx1, far_cy1),
-            ]
+            hypotheses = []
+            if far0_ok and far1_ok:
+                hypotheses.append((far_cx0, far_cy0, far_cx1, far_cy1))
+            if far0_ok:
+                hypotheses.append((far_cx0, far_cy0,
+                                   far_cx0 + (n_cols - 1) * col_dx, far_cy0 + (n_cols - 1) * col_dy))
+            if far1_ok:
+                hypotheses.append((far_cx1 - (n_cols - 1) * col_dx, far_cy1 - (n_cols - 1) * col_dy,
+                                   far_cx1, far_cy1))
             for hx0, hy0, hx1, hy1 in hypotheses:
                 patches, corr = _build_and_validate(hx0, hy0, hx1, hy1)
                 if patches is not None and corr > best_corr:
@@ -661,7 +679,47 @@ def _detect_colorchecker_mini(img_rgb, reference, n_rows=_N_ROWS, n_cols=_N_COLS
         if best_corr >= HIGH_CONFIDENCE_CORR:
             break
 
-    return best_patches
+    if best_patches is None:
+        return None
+
+    return _refine_patch_positions(img_rgb, best_patches, reference)
+
+
+def _refine_patch_positions(img_rgb, patches, reference, refine_frac=0.3):
+    """
+    Nudge every patch (not just the 4 corners) onto its own best local
+    match, once, after the whole-grid homography has already been chosen.
+
+    The homography is fit from just 4 corner points, so even once those
+    corners are accurate, *interior* patches are placed by pure projective
+    interpolation — real charts/photos deviate from an ideal flat
+    projective mapping by a little (chart not perfectly planar, mild lens
+    distortion, slight A4/F4 corner-search error), and that residual error
+    isn't confined to the far row; it shows up anywhere in the grid. Each
+    patch's own reference color is known and (by chart design) well
+    separated from its neighbors, so the same targeted color-match search
+    used for corners can re-center each patch individually. The search
+    window is kept small (±refine_frac of the patch size, well under half
+    the inter-patch pitch) so it can only nudge within the gutter around a
+    patch's current position, never jump to a neighboring patch.
+    """
+    refined = []
+    for pid, (x, y, pw, ph) in zip(_PATCH_IDS, patches):
+        if pid not in reference:
+            refined.append((x, y, pw, ph))
+            continue
+        target_L, target_a, target_b = reference[pid]
+        cx, cy = x + pw // 2, y + ph // 2
+        rcx, rcy, cost = _find_corner_patch_center(img_rgb, cx, cy, pw, ph,
+                                                   target_L, target_a, target_b,
+                                                   search_frac=refine_frac)
+        if np.isfinite(cost):
+            nx = max(0, min(int(round(rcx - pw / 2)), img_rgb.width - pw))
+            ny = max(0, min(int(round(rcy - ph / 2)), img_rgb.height - ph))
+            refined.append((nx, ny, pw, ph))
+        else:
+            refined.append((x, y, pw, ph))
+    return refined
 
 
 # ---------------------------------------------------------------------------
@@ -670,13 +728,23 @@ def _detect_colorchecker_mini(img_rgb, reference, n_rows=_N_ROWS, n_cols=_N_COLS
 
 def _sample_patch_lab(img, bbox, icc_bytes=None):
     """
-    Sample the inner 50% (linear) of *bbox* from *img* — i.e. 25% of its
-    area — and return mean CIELab D50. Uses the embedded ICC profile for
-    source→sRGB conversion when available.
+    Sample the inner 40% (linear) of *bbox* from *img* — i.e. 16% of its
+    area — and return mean CIELab D50.
+
+    When an embedded ICC profile is available, pixels are converted
+    straight to Lab (the profile's own A2B/matrix+TRC tags, which define an
+    exact, gamut-agnostic mapping into the Lab PCS — the same path a color-
+    managed app's info/eyedropper readout uses). Going via an intermediate
+    8-bit sRGB conversion instead — as this previously did — clips any
+    patch color that falls outside the sRGB gamut (common for saturated
+    chart patches under a wide-gamut source profile such as eciRGB or Adobe
+    RGB), which is exactly the kind of mismatch against Photoshop's Info
+    panel this was changed to avoid. Falls back to the plain-sRGB formula
+    below when there's no embedded profile, or if the transform fails.
     """
     x, y, pw, ph = bbox
-    mx = max(1, int(pw * 0.25))
-    my = max(1, int(ph * 0.25))
+    mx = max(1, int(pw * 0.3))
+    my = max(1, int(ph * 0.3))
     x1, y1 = x + mx, y + my
     x2, y2 = x + pw - mx, y + ph - my
     if x2 <= x1 or y2 <= y1:
@@ -686,11 +754,19 @@ def _sample_patch_lab(img, bbox, icc_bytes=None):
 
     if icc_bytes:
         try:
-            src  = ImageCms.ImageCmsProfile(BytesIO(icc_bytes))
-            srgb = ImageCms.createProfile('sRGB')
-            t    = ImageCms.buildTransform(src, srgb, 'RGB', 'RGB',
-                                           renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC)
-            crop = ImageCms.applyTransform(crop, t)
+            src = ImageCms.ImageCmsProfile(BytesIO(icc_bytes))
+            lab_profile = ImageCms.createProfile('LAB')
+            t = ImageCms.buildTransform(src, lab_profile, 'RGB', 'LAB',
+                                        renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC)
+            lab_crop = ImageCms.applyTransform(crop, t)
+            # PIL's 8-bit LAB mode: L byte 0..255 -> 0..100; a/b bytes are
+            # two's-complement signed (0..255 reinterpreted as -128..127),
+            # not offset by +128.
+            arr = np.asarray(lab_crop, dtype=np.uint8).reshape(-1, 3)
+            L = arr[:, 0].astype(np.float64) * 100.0 / 255.0
+            a = arr[:, 1].astype(np.int8).astype(np.float64)
+            b = arr[:, 2].astype(np.int8).astype(np.float64)
+            return (float(L.mean()), float(a.mean()), float(b.mean()))
         except Exception:
             pass  # fall through to raw pixel values
 
@@ -706,7 +782,8 @@ def _sample_patch_lab(img, bbox, icc_bytes=None):
 
 def run_color_accuracy_check(image_path, reference_path, logger,
                              mean_de_threshold=4.0, max_de_threshold=10.0,
-                             wb_threshold=2.0, exposure_threshold=2.0):
+                             wb_threshold=2.0, exposure_threshold=2.0,
+                             write_metadata=True):
     """
     Detect a ColorChecker Mini in *image_path*, measure each patch, and
     compare against *reference_path* (CGATS.17).  Results are written to
@@ -716,6 +793,9 @@ def run_color_accuracy_check(image_path, reference_path, logger,
       - Colour accuracy: mean dE2000 ≤ mean_de_threshold, max dE2000 ≤ max_de_threshold
       - White balance:   dE(a*b*)  (grey patches) ≤ wb_threshold
       - Exposure:        dL*2000   (grey patches, mean |·|) ≤ exposure_threshold
+
+    When *write_metadata* is False, the file itself is left untouched (no
+    Instructions-field write) — for standalone/read-only checking.
 
     Returns a report dict, or None on hard failure.
     """
@@ -832,7 +912,8 @@ def run_color_accuracy_check(image_path, reference_path, logger,
         'pass':               passed,
     }
 
-    _write_colorcheck_metadata(image_path, report, logger)
+    if write_metadata:
+        _write_colorcheck_metadata(image_path, report, logger)
 
     return report
 

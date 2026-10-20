@@ -59,6 +59,7 @@ Pass flags after the launcher:
 | `--dry-run` | Preview all actions without modifying any files |
 | `--skip-metadata` | Validate and move files only; skip metadata writing |
 | `--metadata-only` | Write metadata to already-processed files (requires author code) |
+| `--colorcheck-only` | Check color accuracy against the calibration target only; no move, metadata write, or derivative |
 
 ---
 
