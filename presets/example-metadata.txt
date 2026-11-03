@@ -1,0 +1,22 @@
+# Example metadata preset — copy to <code>-metadata.txt (e.g. abc-metadata.txt)
+# or let onboard.py create it. Personal presets are not tracked by git.
+
+# ===== REQUIRED =====
+Creator="Firstname Lastname"
+Rights="Institution"
+Relation="Project Standards (Version 1.0.0)"
+
+# ===== RECOMMENDED =====
+Authors Position="Job title"
+Address="Street 1"
+City="City"
+Postal Code="0000"
+Country="Country"
+Email Work="name@example.org"
+Telephone Work="+00 00 000 00 00"
+Website="example.org"
+
+# ===== OPTIONAL =====
+Title=""
+Description=""
+Instructions=""

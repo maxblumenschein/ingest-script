@@ -19,8 +19,8 @@ The wizard will:
 
 1. Create a virtual environment and install Python dependencies
 2. Check for ExifTool and provide install instructions if missing
-3. Create your personal metadata preset in `presets/`
-4. Create `user_config.py` with your source and destination paths
+3. Create `config.json` with the source and destination paths (once per installation, shared by all users)
+4. Create your personal metadata preset `presets/<code>-metadata.txt`
 
 After setup, everything is ready to use via the launcher scripts.
 
@@ -48,7 +48,28 @@ Python 3.9 or newer is required.
 ./PROCESS.ps1      # Windows (PowerShell)
 ```
 
-The launcher reads your author code and paths from `user_config.py` and starts the pipeline.
+At start the launcher shows the last user — press **Enter** to continue, or type another author code to switch:
+
+```
+  User: blm  (Max Blumenschein)
+  Enter = continue  ·  switch: type abc
+  >
+```
+
+Paths come from `config.json`; the user's metadata from `presets/<code>-metadata.txt`. An old `user_config.py` still works as a fallback.
+
+### Color accuracy check (test phase)
+
+```
+./PROCESS_colorcheck_only         # macOS / Linux
+./PROCESS_colorcheck_only.ps1     # Windows (PowerShell)
+```
+
+This only reads the images in the source folder; nothing is moved, renamed, or written into the files. The only output is a log in `SRC/__log__/colorcheck_<timestamp>.log` (patch table, ΔE2000, white balance, exposure). It only checks the `wNa` view (e.g. `gw1a`).
+
+Reference file, first match wins: `--colorcheck-reference PATH` → `COLORCHECK_REFERENCE` in `config.json` → the newest `_internal/resources/ccmi_*.txt`.
+
+A normal `./PROCESS` run does **not** run the color check while `COLORCHECK_IN_PIPELINE = False` (in `_internal/variables.py`).
 
 ### Options
 
@@ -60,6 +81,9 @@ Pass flags after the launcher:
 | `--skip-metadata` | Validate and move files only; skip metadata writing |
 | `--metadata-only` | Write metadata to already-processed files (requires author code) |
 | `--colorcheck-only` | Check color accuracy against the calibration target only; no move, metadata write, or derivative |
+| `--colorcheck-reference PATH` | Reference file for `--colorcheck-only` |
+| `--user CODE` | Run as this user without asking |
+| `-y`, `--yes` | Continue with the last user without asking |
 
 ---
 
@@ -90,21 +114,27 @@ Pass flags after the launcher:
 
 ## Adding a new user
 
-Run `python3 onboard.py` and follow the prompts. This creates:
+Run `python3 onboard.py` and follow the prompts. Two kinds of file, for two questions:
 
-- `presets/abc-metadata.txt` — personal metadata (Creator, Rights, Relation, contact details)
-- `user_config.py` — local paths and author code (not committed to git)
+| File | Answers | Contents | How many |
+|---|---|---|---|
+| `config.json` | *Where* does the script read and write? | SRC, DST, staging, colorcheck reference | one per installation, shared |
+| `presets/abc-metadata.txt` | *Who* photographed this? | Creator, Rights, Relation, contact details — written into every image | one per user; the file name is the author code |
 
-To edit your metadata after setup, open `presets/abc-metadata.txt` directly.
+If `config.json` already exists, onboarding keeps it and only asks for the new user's metadata. An old `user_config.py` can be converted into `config.json` during onboarding.
+
+To edit your metadata later, open `presets/abc-metadata.txt` directly; to change paths, edit `config.json`.
+
+Neither is **tracked by git** — they stay on each machine. The repo only holds templates: `config.example.json` and `presets/example-metadata.txt` (never offered as a user).
 
 ---
 
 ## Staging
 
-For faster processing when the destination is a slow external drive, set a staging directory in `user_config.py`:
+For faster processing when the destination is a slow external drive, set a staging directory in `config.json`:
 
-```python
-STAGING_DIR = "/path/to/fast/local/drive"
+```json
+"STAGING_DIR": "/path/to/fast/local/drive"
 ```
 
 All processing happens on the fast drive first; files are bulk-copied to the destination at the end.

@@ -12,7 +12,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 Set-Location $ScriptDir
 
 # First-time setup check
-if (-not (Test-Path "user_config.py")) {
+if (-not (Test-Path "config.json") -and -not (Test-Path "user_config.py")) {
     Write-Host ""
     Write-Host "  No user configuration found."
     Write-Host "  Run once to set up:  python onboard.py"
@@ -36,16 +36,7 @@ if ($IsWin) {
 & $PythonExe -m pip install --quiet --upgrade pip
 & $PythonExe -m pip install --quiet -r (Join-Path (Join-Path $ScriptDir "_internal") "requirements.txt")
 
-# Read author code from user_config.py
-$AuthorCode = & $PythonExe -c "from user_config import AUTHOR_CODE; print(AUTHOR_CODE)" 2>$null
-
-if (-not $AuthorCode) {
-    Write-Host ""
-    Write-Host "  AUTHOR_CODE missing from user_config.py"
-    Write-Host "  Run: python onboard.py"
-    Write-Host ""
-    exit 1
-}
-
+# process.py reads the paths from config.json and asks who is working
+# (Enter = last user).
 $PythonScript = (Join-Path (Join-Path $ScriptDir "_internal") "process.py")
-& $PythonExe $PythonScript $AuthorCode @args
+& $PythonExe $PythonScript @args

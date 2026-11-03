@@ -1,0 +1,9 @@
+{
+  "SRC": "~/Pictures/to-process",
+  "DST": "/Volumes/Archive/photos",
+  "PRIMARY_DST": null,
+  "DERIVATIVE_DST": null,
+  "STAGING_DIR": null,
+  "SUBDIR_MODE": "prefix",
+  "COLORCHECK_REFERENCE": null
+}

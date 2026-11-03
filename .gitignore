@@ -1,6 +1,11 @@
 .DS_Store
 user_config.py
+config.json
 bin/
 venv/
 __pycache__/
 *.pyc
+
+# Personal presets stay local — only the examples are tracked
+presets/*
+!presets/example-metadata.txt

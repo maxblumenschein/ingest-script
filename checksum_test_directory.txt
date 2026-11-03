@@ -1,0 +1,6 @@
+DIR="/path/to/dir" && \
+LOG="$(dirname "$DIR")/$(basename "$DIR")_checksum.txt" && \
+NEW=$(find "$DIR" -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | awk '{print $1}') && \
+OLD=$(tail -1 "$LOG" 2>/dev/null | awk '{print $NF}') && \
+[ "$NEW" = "$OLD" ] && echo "✅ No changes" || echo "⚠️ Changed" && \
+echo "$(date '+%Y-%m-%d %H:%M:%S') $NEW" >> "$LOG"

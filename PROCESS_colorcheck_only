@@ -1,0 +1,10 @@
+#!/bin/bash
+# Color accuracy check only (test phase) — reads the images in the source
+# folder and reports ΔE / white balance / exposure. Nothing is moved,
+# renamed, or written into the image files (only a log in SRC/__log__).
+#
+# Reference: COLORCHECK_REFERENCE from the preset, otherwise the newest
+# _internal/resources/ccmi_*.txt. Override with --colorcheck-reference PATH.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/PROCESS" --colorcheck-only "$@"

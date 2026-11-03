@@ -24,6 +24,17 @@ _local_bin = os.path.join(REPO_ROOT, "bin")
 if os.path.isdir(_local_bin):
     os.environ["PATH"] = _local_bin + os.pathsep + os.environ.get("PATH", "")
 
+from modules.presets import CONFIG_FILE, PresetError, choose_user
+
+PRESETS_DIR = os.path.join(REPO_ROOT, "presets")
+COLORCHECK_ONLY = "--colorcheck-only" in sys.argv[1:]
+
+if not (os.path.isfile(os.path.join(REPO_ROOT, CONFIG_FILE))
+        or os.path.isfile(os.path.join(REPO_ROOT, "user_config.py"))):
+    print(f'\n  No {CONFIG_FILE} found.')
+    print('  Run once to set up:  python3 onboard.py\n')
+    sys.exit(1)
+
 from PIL import Image
 
 warnings.filterwarnings('ignore', category=Image.DecompressionBombWarning)
@@ -37,10 +48,15 @@ from modules.imageops import create_jpg_derivative
 from modules.logging_utils import setup_logging
 from modules.metadata import MetadataPresetError, load_preset_for_code
 from modules.planner import build_plan
+try:
+    import variables
+except PresetError as e:
+    print(f'  error: {e}')
+    sys.exit(2)
 from variables import (DST, PRIMARY_DST, DERIVATIVE_DST, SKIPPED, SRC, STAGING_DIR,
                        SUBDIR_MODE, COLORCHECK_REFERENCE, COLORCHECK_MEAN_DE_THRESHOLD,
                        COLORCHECK_MAX_DE_THRESHOLD, COLORCHECK_WB_THRESHOLD,
-                       COLORCHECK_EXPOSURE_THRESHOLD,
+                       COLORCHECK_EXPOSURE_THRESHOLD, COLORCHECK_IN_PIPELINE,
                        required_metadata_tags)
 
 # When a staging dir is configured, all processing happens there (under
@@ -53,11 +69,15 @@ effective_derivative_dst = os.path.join(STAGING_DIR, "derivative") if STAGING_DI
 # === Logging ===
 now = datetime.now(timezone.utc).astimezone()
 date_suffix = now.strftime("%Y-%m-%dT%H%M%S")
-log_dir = os.path.join(effective_dst, "__log__")
+# Color-check-only never touches DST/staging: its log goes to SRC/__log__.
+log_dir = os.path.join(SRC if COLORCHECK_ONLY else effective_dst, "__log__")
 os.makedirs(log_dir, exist_ok=True)
-log_file = os.path.join(log_dir, f"process_{date_suffix}.log")
+log_name = "colorcheck" if COLORCHECK_ONLY else "process"
+log_file = os.path.join(log_dir, f"{log_name}_{date_suffix}.log")
 logger = setup_logging(log_file)
-if STAGING_DIR:
+if COLORCHECK_ONLY:
+    logger.info("Starting colorcheck  SRC=%s", SRC)
+elif STAGING_DIR:
     logger.info("Starting process  SRC=%s  PRIMARY_DST=%s  DERIVATIVE_DST=%s  staging=%s",
                SRC, PRIMARY_DST, DERIVATIVE_DST, STAGING_DIR)
 else:
@@ -76,6 +96,12 @@ def _progress(current, total, fname):
 
 
 def _finish():
+    if COLORCHECK_ONLY:
+        # Read-only mode: the log already lives in SRC/__log__; don't copy it
+        # anywhere else and don't clean up directories in SRC.
+        logger.info("Colorcheck done")
+        print(f'  log: {log_file}')
+        return
     try:
         inlog = os.path.join(SRC, "__log__")
         os.makedirs(inlog, exist_ok=True)
@@ -197,16 +223,43 @@ def _print_colorcheck_summary(fail_list, notfound_list):
                len(fail_list), len(notfound_list))
 
 
-def run_colorcheck_only():
+def _resolve_colorcheck_reference(cli_reference):
+    """
+    Reference file for the color check, first match wins:
+      1. --colorcheck-reference PATH
+      2. COLORCHECK_REFERENCE from the preset / user_config.py
+      3. newest _internal/resources/ccmi_*.txt (sorted by name = by date)
+    """
+    if cli_reference:
+        return os.path.abspath(os.path.expanduser(cli_reference)), "--colorcheck-reference"
+    if COLORCHECK_REFERENCE:
+        return COLORCHECK_REFERENCE, "config"
+    res_dir = os.path.join(INTERNAL_DIR, "resources")
+    bundled = sorted(f for f in os.listdir(res_dir)
+                     if f.startswith("ccmi_") and f.endswith(".txt"))
+    if bundled:
+        return os.path.join(res_dir, bundled[-1]), "bundled default"
+    return None, None
+
+
+def run_colorcheck_only(cli_reference=None):
     """
     Check color accuracy against the calibration target only — no move,
     metadata write, or derivative creation. Files are read in place at SRC
     and left untouched.
     """
     logger.info("Running in colorcheck-only mode")
-    if not COLORCHECK_REFERENCE:
-        print('  error: COLORCHECK_REFERENCE is not configured')
+    reference, ref_source = _resolve_colorcheck_reference(cli_reference)
+    if not reference:
+        print('  error: no color reference — set COLORCHECK_REFERENCE in your preset '
+              'or pass --colorcheck-reference PATH')
         sys.exit(2)
+    if not os.path.isfile(reference):
+        print(f'  error: color reference not found: {reference}')
+        sys.exit(2)
+    print(f'\n  source:    {SRC}')
+    print(f'  reference: {os.path.basename(reference)}  ({ref_source})')
+    logger.info("Color reference: %s (%s)", reference, ref_source)
 
     files = []
     for dirpath, _, filenames in os.walk(SRC):
@@ -230,7 +283,7 @@ def run_colorcheck_only():
         _progress(i, len(files), fname)
         try:
             ccheck = run_color_accuracy_check(
-                fullpath, COLORCHECK_REFERENCE, logger,
+                fullpath, reference, logger,
                 mean_de_threshold=COLORCHECK_MEAN_DE_THRESHOLD,
                 max_de_threshold=COLORCHECK_MAX_DE_THRESHOLD,
                 wb_threshold=COLORCHECK_WB_THRESHOLD,
@@ -263,8 +316,19 @@ def main():
     parser.add_argument("--colorcheck-only", action="store_true",
                         help="Only check color accuracy against the calibration "
                              "target; no move, metadata write, or derivative")
+    parser.add_argument("--colorcheck-reference", metavar="PATH",
+                        help="CGATS.17 reference file for --colorcheck-only "
+                             "(overrides the preset)")
+    parser.add_argument("--user", metavar="CODE",
+                        help="Run as this user (presets/CODE-metadata.txt) without asking")
+    parser.add_argument("--yes", "-y", action="store_true",
+                        help="Continue with the last user without asking")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    if args.colorcheck_reference and not args.colorcheck_only:
+        print('  error: --colorcheck-reference requires --colorcheck-only')
+        sys.exit(2)
 
     resources_dir = os.path.join(REPO_ROOT, "presets")
     exif_args = None
@@ -277,10 +341,25 @@ def main():
         print('  error: --colorcheck-only cannot be combined with --metadata-only or --skip-metadata')
         sys.exit(2)
 
+    # Color check needs no user — it writes no metadata.
     if args.colorcheck_only:
-        run_colorcheck_only()
+        run_colorcheck_only(args.colorcheck_reference)
         _finish()
         return
+
+    # Who is working: --user / positional code → prompt (Enter = last user)
+    # → AUTHOR_CODE from a legacy user_config.py
+    try:
+        args.author_code = choose_user(PRESETS_DIR,
+                                       requested=args.user or args.author_code,
+                                       assume_yes=args.yes)
+    except PresetError as e:
+        print(f'  error: {e}')
+        sys.exit(2)
+    if not args.author_code:
+        args.author_code = getattr(variables, "AUTHOR_CODE", None)
+    if args.author_code:
+        logger.info("User: %s", args.author_code)
 
     if args.author_code and not args.skip_metadata:
         try:
@@ -390,13 +469,16 @@ def main():
                         move_file(target_path, skipped_dir, 'missing required metadata',
                                   dry_run=False, logger=logger)
 
-            # 6. Color accuracy check (only when a reference file is configured,
-            # and only for the naming convention's designated view that
-            # actually includes the calibration target — e.g. gw1a, not
-            # gw11/gw1r/gw1d/... which never show it).
+            # 6. Color accuracy check — disabled during the test phase
+            # (COLORCHECK_IN_PIPELINE = False in variables.py); use
+            # --colorcheck-only instead. When enabled it needs a reference
+            # file and only runs on the naming convention's designated view
+            # that actually includes the calibration target — e.g. gw1a, not
+            # gw11/gw1r/gw1d/... which never show it.
             # Runs before the derivative so its PASS/FAIL/ΔE tags are part of
             # the metadata snapshot the derivative copies from the master.
-            if (_ok and not args.dry_run and COLORCHECK_REFERENCE
+            if (_ok and not args.dry_run and COLORCHECK_IN_PIPELINE
+                   and COLORCHECK_REFERENCE
                    and has_color_target_view(item['fname'])):
                 try:
                     from modules.colorcheck import run_color_accuracy_check
