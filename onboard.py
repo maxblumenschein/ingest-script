@@ -315,8 +315,22 @@ def _create_shared_config():
         primary_dst = _ask_path("Primary (original) files directory", required=True)
         derivative_dst = _ask_path("Derivative (JPG) files directory", required=True)
 
-    staging = _ask_path("Staging directory  (optional — leave blank to skip)")
-    staging = staging if staging else None
+    def _overlaps(a, b):
+        a = os.path.realpath(os.path.expanduser(a))
+        b = os.path.realpath(os.path.expanduser(b))
+        return os.path.commonpath([a, b]) in (a, b)
+
+    # The staging dir is deleted after every run, so it must not overlap
+    # with source or any destination.
+    others = [src, primary_dst or os.path.join(dst, "primary"),
+              derivative_dst or os.path.join(dst, "derivative")]
+    while True:
+        staging = _ask_path("Staging directory  (optional — leave blank to skip)")
+        staging = staging if staging else None
+        if not staging or not any(_overlaps(staging, o) for o in others):
+            break
+        _warn("Staging must be a separate folder — not the same as, inside, or "
+              "containing the source or a destination (it is emptied after each run).")
 
     print(textwrap.dedent("""\
 

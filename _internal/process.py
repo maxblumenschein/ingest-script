@@ -59,6 +59,41 @@ from variables import (DST, PRIMARY_DST, DERIVATIVE_DST, SKIPPED, SRC, STAGING_D
                        COLORCHECK_EXPOSURE_THRESHOLD, COLORCHECK_IN_PIPELINE,
                        required_metadata_tags)
 
+def _check_staging_paths():
+    """
+    The staging dir is deleted after the bulk copy, so it must be a dedicated
+    folder: not equal to, inside, or containing SRC / DST / PRIMARY_DST /
+    DERIVATIVE_DST. Otherwise the cleanup would wipe the archive itself.
+    """
+    if not STAGING_DIR:
+        return
+    staging = os.path.realpath(STAGING_DIR)
+    # DST itself is only the parent of the PRIMARY/DERIVATIVE defaults
+    # (always resolved in variables.py), so it isn't checked separately.
+    for name, path in (("SRC", SRC), ("PRIMARY_DST", PRIMARY_DST),
+                       ("DERIVATIVE_DST", DERIVATIVE_DST)):
+        if not path:
+            continue
+        other = os.path.realpath(path)
+        if staging == other:
+            problem = "is the same directory as"
+        elif os.path.commonpath([staging, other]) == other:
+            problem = "is inside"
+        elif os.path.commonpath([staging, other]) == staging:
+            problem = "contains"
+        else:
+            continue
+        print(f'\n  error: STAGING_DIR {problem} {name}')
+        print(f'    STAGING_DIR = {STAGING_DIR}')
+        print(f'    {name} = {path}')
+        print('  The staging dir is deleted after each run — use a separate, '
+              'dedicated folder (config.json).\n')
+        sys.exit(2)
+
+
+if not COLORCHECK_ONLY:
+    _check_staging_paths()
+
 # When a staging dir is configured, all processing happens there (under
 # primary/ and derivative/ subfolders); the result is bulk-copied to
 # PRIMARY_DST / DERIVATIVE_DST at the end. Otherwise write directly there.
@@ -160,6 +195,16 @@ def _copy_staging_to_dst():
                 continue
             shutil.copy2(src_file, dst_file)
         print()
+        # Verify every staged file arrived before anything in staging is removed.
+        missing = []
+        for src_file, staging_root, real_root in all_files:
+            dst_file = os.path.join(real_root, os.path.relpath(src_file, staging_root))
+            if not os.path.isfile(dst_file) or \
+                    os.path.getsize(dst_file) != os.path.getsize(src_file):
+                missing.append(dst_file)
+        if missing:
+            raise RuntimeError(f"{len(missing)} file(s) not verified at destination, "
+                               f"e.g. {missing[0]}")
         # Deliver a copy of the log alongside the primary archive, before the
         # staging dir (which currently holds the log file) is removed. Handlers
         # are detached here, so report failures via print rather than logger.
@@ -169,7 +214,16 @@ def _copy_staging_to_dst():
             shutil.copy2(log_file, os.path.join(primary_log_dir, os.path.basename(log_file)))
         except Exception as e:
             print(f'\n  ! Failed to deliver log copy to primary destination: {e}')
-        shutil.rmtree(STAGING_DIR)
+        # Remove only the subtrees this script created — never anything else
+        # that may live in the staging dir.
+        for sub in ("primary", "derivative", "__log__"):
+            p = os.path.join(STAGING_DIR, sub)
+            if os.path.isdir(p):
+                shutil.rmtree(p)
+        try:
+            os.rmdir(STAGING_DIR)   # only succeeds if now empty
+        except OSError:
+            pass
         logger.info("Staging copy complete")
     except Exception as e:
         logger.error("Staging copy failed: %s", e)
